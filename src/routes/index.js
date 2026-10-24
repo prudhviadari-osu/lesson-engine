@@ -7,6 +7,9 @@ import {
 import {
   generatePlan, getPlan, unscheduleLesson, rescheduleLesson, clearPlan,
 } from '../services/planner.js';
+import {
+  startSession, sendMessage, getHistory, resetSession, getLessonContext,
+} from '../services/tutor.js';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -18,7 +21,7 @@ const UPLOAD_DIR = join(__dirname, '..', '..', 'uploads');
 // resources, planner/reflow, compile/consent, ingestion.
 export async function registerRoutes(app) {
   // Health
-  app.get('/health', async () => ({ ok: true, service: 'learning++', step: 'planner' }));
+  app.get('/health', async () => ({ ok: true, service: 'learning++', step: 'tutor-prototype' }));
 
   // --- Users / profiles (lightweight; no passwords) --------------------------
   app.get('/users', async () => ({ users: listUsers() }));
@@ -218,6 +221,70 @@ export async function registerRoutes(app) {
        ON CONFLICT(date) DO UPDATE SET completed_count = completed_count + 1`
     ).run(today);
     return { ok: true };
+  });
+
+  // --- Interactive tutor (prototype) -----------------------------------------
+  // A multi-turn chat tied to one lesson + the acting user. Coach teaches in
+  // small bites, reacts to the student's ACTUAL typed answers, and guides them
+  // to produce the deliverable themselves (never writes it). Sits ALONGSIDE the
+  // static block model; it does not replace it. Needs GEMINI_API_KEY to reply.
+
+  // Fetch the saved transcript (so the harness can resume a conversation).
+  app.get('/lessons/:id/tutor', async (req, reply) => {
+    try {
+      getLessonContext(req.params.id); // throws NOT_FOUND if the lesson is gone
+    } catch (err) {
+      if (err.code === 'NOT_FOUND') return reply.code(404).send({ error: 'lesson not found' });
+      throw err;
+    }
+    const userId = resolveUserId(req);
+    return { lessonId: Number(req.params.id), history: getHistory(req.params.id, userId) };
+  });
+
+  // Start or resume a session. Coach speaks first. Pass { reset: true } to wipe
+  // and begin fresh. Returns the full history (including Coach's opening turn).
+  app.post('/lessons/:id/tutor/start', async (req, reply) => {
+    try {
+      const userId = resolveUserId(req);
+      const user = userId ? getUser(userId) : null;
+      const reset = req.body?.reset === true;
+      return await startSession(req.params.id, user, { reset });
+    } catch (err) {
+      if (err.code === 'NOT_FOUND') return reply.code(404).send({ error: 'lesson not found' });
+      if (err.code === 'NO_API_KEY') return reply.code(400).send({ error: err.message, code: 'NO_API_KEY' });
+      if (err.code === 'OVERLOADED') return reply.code(503).send({ error: err.message, retryable: true });
+      app.log.error(err);
+      return reply.code(502).send({ error: 'tutor start failed', detail: err.message });
+    }
+  });
+
+  // Send the student's message; get Coach's next turn back (+ updated history).
+  app.post('/lessons/:id/tutor', async (req, reply) => {
+    try {
+      const userId = resolveUserId(req);
+      const user = userId ? getUser(userId) : null;
+      return await sendMessage(req.params.id, user, req.body?.message);
+    } catch (err) {
+      if (err.code === 'NOT_FOUND') return reply.code(404).send({ error: 'lesson not found' });
+      if (err.code === 'BAD_INPUT') return reply.code(400).send({ error: err.message });
+      if (err.code === 'NO_API_KEY') return reply.code(400).send({ error: err.message, code: 'NO_API_KEY' });
+      if (err.code === 'OVERLOADED') return reply.code(503).send({ error: err.message, retryable: true });
+      app.log.error(err);
+      return reply.code(502).send({ error: 'tutor reply failed', detail: err.message });
+    }
+  });
+
+  // Reset a session (clear the transcript) without starting a new one.
+  app.delete('/lessons/:id/tutor', async (req, reply) => {
+    try {
+      getLessonContext(req.params.id);
+    } catch (err) {
+      if (err.code === 'NOT_FOUND') return reply.code(404).send({ error: 'lesson not found' });
+      throw err;
+    }
+    const userId = resolveUserId(req);
+    const cleared = resetSession(req.params.id, userId);
+    return { ok: true, cleared };
   });
 
   // --- Compile (spine stub: assemble current answers + what's missing) -------

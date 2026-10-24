@@ -72,6 +72,23 @@
     <div id="lesson"></div>
   </div>
 
+  <div class="card" style="background:#fdf7ff">
+    <h2>🎮 Interactive Tutor (prototype) — chat with "Coach"</h2>
+    <div class="muted">A live, back-and-forth tutor for ONE lesson. Coach teaches in small bites and
+      reacts to what you actually type — it never writes your answer. Needs GEMINI_API_KEY on the server.</div>
+    <div style="margin-top:.5rem">
+      Lesson id: <input type="text" id="tutorLessonId" value="1" style="width:4rem" />
+      <button onclick="tutorStart(false)">▶ Start / Resume</button>
+      <button class="ghost" onclick="tutorStart(true)">↻ Restart</button>
+      <span id="tutorStatus" class="muted"></span>
+    </div>
+    <div id="tutorTranscript" style="margin-top:.8rem; max-height:360px; overflow:auto; border:1px solid #e3d6ea; border-radius:8px; padding:.6rem; background:#fff;"></div>
+    <div style="margin-top:.5rem; display:flex; gap:.4rem; align-items:flex-start">
+      <textarea id="tutorInput" placeholder="Type your reply to Coach, then Send (Enter to send, Shift+Enter for newline)…" style="min-height:44px"></textarea>
+      <button id="tutorSendBtn" onclick="tutorSend()">Send</button>
+    </div>
+  </div>
+
   <div class="card">
     <h2>Compile "submission"</h2>
     Assignment id: <input type="text" id="asgId" value="1" style="width:4rem" />
@@ -329,6 +346,65 @@ async function pasteResultRefresh(assignmentId) {
        `<button class="ghost" onclick="loadLesson(${l.id})">open in player ↓</button></div></details>`
   ).join('');
 }
+
+// --- Interactive Tutor (prototype) ------------------------------------------
+function tutorLessonId() { return document.getElementById('tutorLessonId').value; }
+
+function renderTutor(history) {
+  const el = document.getElementById('tutorTranscript');
+  if (!history || !history.length) { el.innerHTML = '<p class="muted">No conversation yet. Click "Start / Resume".</p>'; return; }
+  el.innerHTML = history.map(m => {
+    const isCoach = m.role === 'model';
+    const who = isCoach ? '🧑‍🏫 Coach' : '🙂 You';
+    const bg = isCoach ? '#f3eefc' : '#eef5ff';
+    const align = isCoach ? 'left' : 'right';
+    const safe = String(m.content || '').replace(/</g, '&lt;').replace(/\n/g, '<br>');
+    return `<div style="margin:.4rem 0; text-align:${align}">
+      <div style="display:inline-block; max-width:85%; text-align:left; background:${bg}; border-radius:10px; padding:.45rem .7rem;">
+        <div class="type" style="color:#96a">${who}</div>${safe}</div></div>`;
+  }).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+async function tutorStart(reset) {
+  const status = document.getElementById('tutorStatus');
+  status.textContent = reset ? 'restarting…' : 'starting…';
+  const r = await api('/lessons/' + tutorLessonId() + '/tutor/start', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ reset: !!reset })
+  });
+  if (r.error) { status.textContent = '✗ ' + r.error + (r.code === 'NO_API_KEY' ? ' (set GEMINI_API_KEY)' : ''); return; }
+  status.textContent = r.resumed ? '✓ resumed' : '✓ ready';
+  renderTutor(r.history);
+}
+
+async function tutorSend() {
+  const input = document.getElementById('tutorInput');
+  const btn = document.getElementById('tutorSendBtn');
+  const status = document.getElementById('tutorStatus');
+  const message = input.value.trim();
+  if (!message) return;
+  btn.disabled = true; status.textContent = 'Coach is thinking…';
+  // Optimistically show the student's line while we wait.
+  const el = document.getElementById('tutorTranscript');
+  el.insertAdjacentHTML('beforeend',
+    `<div style="margin:.4rem 0; text-align:right"><div style="display:inline-block; max-width:85%; text-align:left; background:#eef5ff; border-radius:10px; padding:.45rem .7rem;"><div class="type" style="color:#96a">🙂 You</div>${message.replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div></div>`);
+  el.scrollTop = el.scrollHeight;
+  input.value = '';
+  const r = await api('/lessons/' + tutorLessonId() + '/tutor', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ message })
+  });
+  btn.disabled = false;
+  if (r.error) { status.textContent = '✗ ' + r.error + (r.code === 'NO_API_KEY' ? ' (set GEMINI_API_KEY)' : ''); return; }
+  status.textContent = '';
+  renderTutor(r.history);
+}
+
+// Enter to send (Shift+Enter = newline)
+document.getElementById('tutorInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); tutorSend(); }
+});
 
 loadUsers().then(loadPlan);
 </script>

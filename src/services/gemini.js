@@ -42,17 +42,16 @@ function hashRequest(parts) {
 }
 
 // Try the model chain; within each model, retry transient errors with backoff.
-async function callWithFallback({ prompt, schema }) {
+// `contents` is the Gemini request body (string or structured turns) and
+// `config` is passed straight through — so this helper serves BOTH the
+// structured-JSON path (responseSchema) and the free-text tutor path (temperature).
+async function callWithFallback({ contents, config }) {
   const ai = getClient();
   let lastErr;
   for (const model of MODEL_CHAIN) {
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const res = await ai.models.generateContent({
-          model,
-          contents: prompt,
-          config: { responseMimeType: 'application/json', responseSchema: schema },
-        });
+        const res = await ai.models.generateContent({ model, contents, config });
         return { res, modelUsed: model };
       } catch (err) {
         lastErr = err;
@@ -90,7 +89,10 @@ export async function generateJSON({ prompt, schema, cacheKeyExtra = '' }) {
     return { data: JSON.parse(cached.response_json), cached: true };
   }
 
-  const { res, modelUsed } = await callWithFallback({ prompt, schema });
+  const { res, modelUsed } = await callWithFallback({
+    contents: prompt,
+    config: { responseMimeType: 'application/json', responseSchema: schema },
+  });
 
   const text = res.text;
   let data;
@@ -107,4 +109,33 @@ export async function generateJSON({ prompt, schema, cacheKeyExtra = '' }) {
   ).run('gemini', request_hash, JSON.stringify(data));
 
   return { data, cached: false };
+}
+
+/**
+ * Free-text (NON-schema) Gemini call for the conversational tutor.
+ * Unlike generateJSON this is intentionally NOT cached — every tutor turn is a
+ * live reaction to what the student just typed, so a cache would defeat the point.
+ *
+ * @param {object}   args
+ * @param {string}   args.prompt       The student's latest message (the turn to answer).
+ * @param {string}   [args.system]     A system instruction that frames the tutor persona + rules.
+ * @param {number}   [args.temperature] Warmer = livelier. Defaults to 0.9 for a chatty feel.
+ * @param {Array<{role:'user'|'model', text:string}>} [args.history] Prior turns, oldest first.
+ * @returns {Promise<{text:string, modelUsed:string}>}
+ */
+export async function generateText({ prompt, system, temperature = 0.9, history = [] }) {
+  // Build the multi-turn `contents` array Gemini expects. Each turn is
+  // { role, parts: [{ text }] }. The student's newest message is the final turn.
+  const contents = [];
+  for (const turn of Array.isArray(history) ? history : []) {
+    const role = turn.role === 'model' ? 'model' : 'user';
+    contents.push({ role, parts: [{ text: String(turn.text ?? '') }] });
+  }
+  contents.push({ role: 'user', parts: [{ text: String(prompt ?? '') }] });
+
+  const config = { temperature };
+  if (system && String(system).trim()) config.systemInstruction = String(system);
+
+  const { res, modelUsed } = await callWithFallback({ contents, config });
+  return { text: res.text ?? '', modelUsed };
 }

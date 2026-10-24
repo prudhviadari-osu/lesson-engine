@@ -47,6 +47,14 @@ then compile the "submission".
       Plan edits touch ONLY plan_entry — never lessons/answers — so compile
       still reports unwritten work as "not done" regardless of the schedule.
 - [ ] Step 5 — Compile + review/consent
+- [~] **Interactive Tutor (PROTOTYPE):** "Coach" — a live multi-turn tutor per
+      lesson that teaches in small bites and reacts to the student's actual typed
+      answers (never writes their answer). Blend of encouraging human tutor +
+      bite-size challenge. `generateText()` added to gemini.js (non-schema, warm
+      temp 0.9, shared retry/fallback). New `tutor_message` table (RE-SEED needed).
+      Routes: `GET/POST/DELETE /lessons/:id/tutor`, `POST /lessons/:id/tutor/start`.
+      Playable in the harness ("🎮 Interactive Tutor"). Sits ALONGSIDE the static
+      block model — calibration prototype, not yet a replacement.
 - [ ] Step 6 — Playwright ingestion
 
 See `../SPEC.md` for the full plan.

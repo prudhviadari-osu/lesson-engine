@@ -94,6 +94,21 @@ CREATE TABLE IF NOT EXISTS streak (
   completed_count INTEGER NOT NULL DEFAULT 0
 );
 
+-- Interactive tutor conversation (prototype). One logical "session" per
+-- (lesson_id, user_id): a multi-turn chat where the student and Gemini go back
+-- and forth. Rows are the transcript, oldest-first by id. role is 'user'
+-- (the student) or 'model' (the tutor). Rebuild the DB (npm run seed) to add it.
+CREATE TABLE IF NOT EXISTS tutor_message (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  lesson_id     INTEGER NOT NULL REFERENCES lesson(id) ON DELETE CASCADE,
+  user_id       INTEGER REFERENCES user(id) ON DELETE CASCADE,
+  role          TEXT NOT NULL,       -- user | model
+  content       TEXT NOT NULL DEFAULT '',
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_tutor_lesson_user ON tutor_message(lesson_id, user_id, id);
+
 CREATE INDEX IF NOT EXISTS idx_course_user       ON course(user_id);
 CREATE INDEX IF NOT EXISTS idx_assignment_course ON assignment(course_id);
 CREATE INDEX IF NOT EXISTS idx_lesson_assignment ON lesson(assignment_id);
