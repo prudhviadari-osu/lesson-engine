@@ -39,7 +39,13 @@ then compile the "submission".
       Routes: `GET/POST/PATCH/DELETE /users[/:id]`.
       Assignment CRUD: `GET /assignments`, `PATCH/DELETE /assignments/:id`.
       **NOTE: schema changed — run `npm run seed` to rebuild `learning.db`.**
-- [ ] Step 4 — Planner + reflow
+- [x] **Step 4 — Planner + reflow:** deterministic scheduler (backward from due
+      date, submission buffer, daily cap, over-capacity flagged not crammed).
+      `POST /plan/reflow` (generate/reflow), `GET /plan` (scheduled days +
+      unscheduled backlog), `DELETE /plan/lessons/:id` (unschedule -> backlog),
+      `POST /plan/lessons/:id/reschedule`, `DELETE /plan` (clear all -> backlog).
+      Plan edits touch ONLY plan_entry — never lessons/answers — so compile
+      still reports unwritten work as "not done" regardless of the schedule.
 - [ ] Step 5 — Compile + review/consent
 - [ ] Step 6 — Playwright ingestion
 

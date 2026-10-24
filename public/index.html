@@ -56,9 +56,12 @@
   </div>
 
   <div class="card">
-    <h2>Plan (today)</h2>
-    <button onclick="loadPlan()">GET /plan</button>
+    <h2>📅 Plan</h2>
+    <button onclick="reflow()">⟳ Generate / Reflow plan</button>
+    <button class="ghost" onclick="loadPlan()">refresh</button>
+    <button class="ghost" style="border-color:#c33;color:#c33" onclick="clearPlan()">🗑 Clear whole plan</button>
     <div id="plan"></div>
+    <div id="backlog"></div>
   </div>
 
   <div class="card">
@@ -144,14 +147,55 @@ async function newUserPrompt() {
 async function loadPlan() {
   const plan = await api('/plan');
   const el = document.getElementById('plan');
-  const day = plan.days[0];
-  el.innerHTML = `<p>🔥 streak today: <b>${plan.todayStreak}</b> · load: <b>${day.loadMinutes} min</b>
-    ${day.overCapacity ? '<span style="color:#c33">⚠ over capacity</span>' : ''}</p>`;
-  el.innerHTML += day.lessons.map(l =>
-    `<div class="block"><span class="type">${l.assignment}</span><br>
-      <b>${l.title}</b> — ${l.estMinutes} min
-      <button class="ghost" onclick="loadLesson(${l.lessonId})">Do this now</button></div>`
-  ).join('') || '<p class="muted">No lessons left today 🎉</p>';
+  el.innerHTML = `<p>🔥 streak today: <b>${plan.todayStreak}</b> · daily cap: ${plan.dailyCapMin} min · buffer: ${plan.submissionBufferDays}d before due</p>`;
+  if (!plan.days.length) {
+    el.innerHTML += '<p class="muted">No scheduled lessons. Click "Generate / Reflow plan".</p>';
+  } else {
+    el.innerHTML += plan.days.map(day =>
+      `<div class="block" ${day.overCapacity ? 'style="border-left-color:#c33"' : ''}>
+        <b>${day.date}</b> — ${day.loadMinutes} min ${day.overCapacity ? '<span style="color:#c33">⚠ over capacity</span>' : ''}
+        ${day.lessons.map(l => `<div style="margin:.3rem 0 .3rem .8rem">
+            <span class="muted">${l.assignment}</span> · ${l.title} (${l.estMinutes}m)
+            <button class="ghost" onclick="loadLesson(${l.lessonId})">do now</button>
+            <button class="ghost" style="border-color:#a60;color:#a60" onclick="unschedule(${l.lessonId}, '${(l.title||'').replace(/'/g,'')}')">unschedule</button>
+          </div>`).join('')}
+      </div>`
+    ).join('');
+  }
+  // Backlog (interpretation b): unscheduled lessons stay visible, not lost.
+  const bl = document.getElementById('backlog');
+  if (plan.unscheduled && plan.unscheduled.length) {
+    bl.innerHTML = `<h3 style="margin-top:1rem">📥 Unscheduled backlog (${plan.unscheduled.length})</h3>
+      <p class="muted" style="margin:.2rem 0">Lessons you left out of the schedule. They still count as "not done" until you do them.</p>` +
+      plan.unscheduled.map(l => `<div class="block" style="border-left-color:#89a">
+        <span class="muted">${l.assignment}</span> · ${l.title} (${l.estMinutes}m)
+        <button class="ghost" onclick="reschedule(${l.lessonId})">↩ reschedule</button>
+        <button class="ghost" onclick="loadLesson(${l.lessonId})">do now</button></div>`).join('');
+  } else { bl.innerHTML = ''; }
+}
+
+async function reflow() {
+  await api('/plan/reflow', { method: 'POST' });
+  loadPlan();
+}
+
+// Confirm step: "reschedule, or leave it out?" (your requested flow)
+async function unschedule(lessonId, title) {
+  const keep = confirm(`Unschedule "${title}".\n\nOK = leave it out (moves to your Unscheduled backlog).\nCancel = keep it scheduled.`);
+  if (!keep) return;
+  await api('/plan/lessons/' + lessonId, { method: 'DELETE' });
+  loadPlan();
+}
+
+async function reschedule(lessonId) {
+  await api('/plan/lessons/' + lessonId + '/reschedule', { method: 'POST' });
+  loadPlan();
+}
+
+async function clearPlan() {
+  if (!confirm('Clear the WHOLE schedule? All lessons move to the backlog (your answers are NOT deleted).')) return;
+  await api('/plan', { method: 'DELETE' });
+  loadPlan();
 }
 
 async function loadLesson(id) {

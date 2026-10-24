@@ -4,6 +4,9 @@ import { resolveResources } from '../services/resolve.js';
 import {
   listUsers, getUser, createUser, updateUser, deleteUser, resolveUserId,
 } from '../services/users.js';
+import {
+  generatePlan, getPlan, unscheduleLesson, rescheduleLesson, clearPlan,
+} from '../services/planner.js';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -15,7 +18,7 @@ const UPLOAD_DIR = join(__dirname, '..', '..', 'uploads');
 // resources, planner/reflow, compile/consent, ingestion.
 export async function registerRoutes(app) {
   // Health
-  app.get('/health', async () => ({ ok: true, service: 'learning++', step: 'users+prefs' }));
+  app.get('/health', async () => ({ ok: true, service: 'learning++', step: 'planner' }));
 
   // --- Users / profiles (lightweight; no passwords) --------------------------
   app.get('/users', async () => ({ users: listUsers() }));
@@ -258,23 +261,38 @@ export async function registerRoutes(app) {
     };
   });
 
-  // --- Plan (spine stub: group today's todo lessons) -------------------------
-  app.get('/plan', async () => {
-    const today = new Date().toISOString().slice(0, 10);
-    const lessons = db.prepare(
-      `SELECT l.id AS lessonId, l.title, l.est_minutes AS estMinutes, a.title AS assignment
-         FROM lesson l JOIN assignment a ON a.id = l.assignment_id
-        WHERE l.status = 'todo' ORDER BY a.due_at, l.seq`
-    ).all();
-    const loadMinutes = lessons.reduce((s, l) => s + l.estMinutes, 0);
-    const streakRow = db.prepare('SELECT completed_count FROM streak WHERE date = ?').get(today);
-    return {
-      reflowVersion: 1,
-      today,
-      todayStreak: streakRow?.completed_count ?? 0,
-      days: [{ date: today, loadMinutes, overCapacity: loadMinutes > 15, lessons }],
-      warnings: [],
-      overflow: []
-    };
+  // --- Planner + reflow (SPEC §7, step 4) ------------------------------------
+  // GET /plan returns scheduled days + the unscheduled backlog (interpretation b).
+  app.get('/plan', async (req) => {
+    const userId = resolveUserId(req);
+    return getPlan(userId);
+  });
+
+  // (Re)generate the schedule from scratch. Use for first-plan and fall-behind reflow.
+  app.post('/plan/reflow', async (req) => {
+    const userId = resolveUserId(req);
+    return generatePlan(userId);
+  });
+
+  // Unschedule one lesson -> it moves to the backlog. Touches only plan_entry;
+  // the lesson + its answers are untouched (so compile still reports it "not done").
+  app.delete('/plan/lessons/:lessonId', async (req) => {
+    const ok = unscheduleLesson(req.params.lessonId);
+    return { ok, action: 'unscheduled' };
+  });
+
+  // Reschedule a backlogged lesson back into the plan (the "reset" path).
+  app.post('/plan/lessons/:lessonId/reschedule', async (req, reply) => {
+    const userId = resolveUserId(req);
+    const ok = rescheduleLesson(userId, req.params.lessonId);
+    if (!ok) return reply.code(404).send({ error: 'lesson not found for this user' });
+    return { ok, action: 'rescheduled' };
+  });
+
+  // Clear the entire schedule -> everything to backlog. (Confirm-gated in the UI.)
+  app.delete('/plan', async (req) => {
+    const userId = resolveUserId(req);
+    const cleared = clearPlan(userId);
+    return { ok: true, cleared, action: 'plan_cleared' };
   });
 }
