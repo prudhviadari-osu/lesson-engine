@@ -141,6 +141,22 @@ CREATE TABLE IF NOT EXISTS xp_event (
 CREATE INDEX IF NOT EXISTS idx_xp_event_user_lesson ON xp_event(user_id, lesson_id);
 CREATE INDEX IF NOT EXISTS idx_xp_event_user_date   ON xp_event(user_id, date);
 
+-- Submission review + consent (SPEC §5 honesty boundary). Before a compiled
+-- submission is considered "ready", the student must explicitly review it and
+-- give consent. We record a snapshot of exactly what they consented to, so
+-- consent is tied to that specific content (editing an answer invalidates it).
+CREATE TABLE IF NOT EXISTS submission_consent (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  assignment_id  INTEGER NOT NULL REFERENCES assignment(id) ON DELETE CASCADE,
+  user_id        INTEGER REFERENCES user(id) ON DELETE CASCADE,
+  content_hash   TEXT NOT NULL,   -- hash of the compiled text they approved
+  reviewed       INTEGER NOT NULL DEFAULT 0, -- 1 = "I reviewed this"
+  consented      INTEGER NOT NULL DEFAULT 0, -- 1 = "this is my own work, submit it"
+  created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_consent_assignment ON submission_consent(assignment_id, user_id, id);
+
 CREATE INDEX IF NOT EXISTS idx_course_user       ON course(user_id);
 CREATE INDEX IF NOT EXISTS idx_assignment_course ON assignment(course_id);
 CREATE INDEX IF NOT EXISTS idx_lesson_assignment ON lesson(assignment_id);

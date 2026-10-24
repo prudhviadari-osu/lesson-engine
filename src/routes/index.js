@@ -13,6 +13,7 @@ import {
 import {
   getFlow, advanceStage, submitChallenge, submitDraft, completeFlow,
 } from '../services/flow.js';
+import { compileAssignment, recordConsent } from '../services/compile.js';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -24,7 +25,7 @@ const UPLOAD_DIR = join(__dirname, '..', '..', 'uploads');
 // resources, planner/reflow, compile/consent, ingestion.
 export async function registerRoutes(app) {
   // Health
-  app.get('/health', async () => ({ ok: true, service: 'learning++', step: 'staged-flow' }));
+  app.get('/health', async () => ({ ok: true, service: 'learning++', step: 'compile+consent' }));
 
   // --- Users / profiles (lightweight; no passwords) --------------------------
   app.get('/users', async () => ({ users: listUsers() }));
@@ -378,45 +379,39 @@ export async function registerRoutes(app) {
     }
   });
 
-  // --- Compile (spine stub: assemble current answers + what's missing) -------
+  // --- Compile + review/consent (SPEC §5) ------------------------------------
+  // Assemble the student's OWN answers into a submission bundle, grouped by
+  // lesson, with a "what's left" breakdown. Reading the answer table only — it
+  // never invents content, and still reports un-written work as "not done"
+  // regardless of plan/XP state. "readyToSubmit" is false until the student
+  // reviews + consents to THIS exact content (POST .../compile/consent).
   app.get('/assignments/:id/compile', async (req, reply) => {
-    const asg = db.prepare('SELECT * FROM assignment WHERE id = ?').get(req.params.id);
-    if (!asg) return reply.code(404).send({ error: 'assignment not found' });
-
-    // All answerable blocks (scaffold_q + draft) in lesson/seq order
-    const blocks = db.prepare(
-      `SELECT lb.id, lb.type, lb.payload_json, l.seq AS lesson_seq, lb.seq AS block_seq
-         FROM lesson_block lb
-         JOIN lesson l ON l.id = lb.lesson_id
-        WHERE l.assignment_id = ? AND lb.type IN ('scaffold_q','draft')
-        ORDER BY l.seq, lb.seq`
-    ).all(asg.id);
-
-    const parts = [];
-    const missing = [];
-    for (const b of blocks) {
-      const ans = db.prepare('SELECT content_text FROM answer WHERE lesson_block_id = ?').get(b.id);
-      const payload = JSON.parse(b.payload_json);
-      const label = payload.instruction || payload.prompt || `Block ${b.id}`;
-      if (ans && ans.content_text.trim()) {
-        parts.push(`## ${label}\n\n${ans.content_text.trim()}\n`);
-      } else {
-        missing.push(label);
-      }
+    try {
+      const userId = resolveUserId(req);
+      return compileAssignment(req.params.id, userId);
+    } catch (err) {
+      if (err.code === 'NOT_FOUND') return reply.code(404).send({ error: 'assignment not found' });
+      throw err;
     }
+  });
 
-    const compiled =
-      `# ${asg.title}\n\n` +
-      parts.join('\n') +
-      (missing.length ? `\n---\n### Still to do (${missing.length})\n` + missing.map((m) => `- ${m}`).join('\n') + '\n' : '');
-
-    return {
-      assignmentId: asg.id,
-      title: asg.title,
-      complete: missing.length === 0,
-      missing,
-      compiledText: compiled
-    };
+  // Record the student's mandatory review + consent for the current submission.
+  // Body: { reviewed: bool, consented: bool, contentHash: string (from GET /compile) }.
+  // If the content changed since they reviewed (hash mismatch), we reject so
+  // consent can never drift from what they actually approved.
+  app.post('/assignments/:id/compile/consent', async (req, reply) => {
+    try {
+      const userId = resolveUserId(req);
+      const { reviewed, consented, contentHash } = req.body ?? {};
+      if (reviewed !== true || consented !== true) {
+        return reply.code(400).send({ error: 'both reviewed:true and consented:true are required to mark ready' });
+      }
+      return recordConsent(req.params.id, userId, { reviewed, consented, contentHash });
+    } catch (err) {
+      if (err.code === 'NOT_FOUND') return reply.code(404).send({ error: 'assignment not found' });
+      if (err.code === 'STALE_CONSENT') return reply.code(409).send({ error: err.message, code: 'STALE_CONSENT' });
+      throw err;
+    }
   });
 
   // --- Planner + reflow (SPEC §7, step 4) ------------------------------------

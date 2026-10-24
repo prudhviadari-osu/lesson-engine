@@ -279,12 +279,49 @@ async function completeLesson(id) {
   loadPlan();
 }
 
+let lastCompile = null;
 async function compile() {
   const id = document.getElementById('asgId').value;
   const r = await api('/assignments/' + id + '/compile');
-  document.getElementById('compile').innerHTML =
-    `<p>${r.complete ? '✅ complete' : '🟡 missing ' + r.missing.length + ' item(s)'}</p>
-     <pre>${r.compiledText.replace(/</g,'&lt;')}</pre>`;
+  lastCompile = r;
+  if (r.error) { document.getElementById('compile').innerHTML = '<p class="muted">' + r.error + '</p>'; return; }
+  const t = r.totals;
+  let html = `<p>${r.complete ? '✅ all items done' : '🟡 ' + r.missing.length + ' item(s) left'} ·
+    ${t.doneItems}/${t.totalItems} items · ${t.deliverablesDone}/${t.deliverables} deliverable(s)</p>`;
+
+  // "What's left", grouped by lesson
+  if (r.missingByLesson.length) {
+    html += `<div class="block" style="border-left-color:#e0a"><b>Still to do:</b>` +
+      r.missingByLesson.map(l => `<div style="margin:.3rem 0 .3rem .6rem"><b>${l.title}</b>${l.lessonStarted?'':' <span class="muted">(not started)</span>'}<ul style="margin:.2rem 0">` +
+        l.missing.map(m => `<li>${m.kind==='deliverable'?'✍️ ':''}${m.label}</li>`).join('') + `</ul></div>`).join('') + `</div>`;
+  }
+
+  html += `<pre>${r.compiledText.replace(/</g,'&lt;')}</pre>`;
+
+  // Review + consent gate
+  html += `<div class="block" style="border-left-color:#357;background:#f4f7ff">
+    <b>Review &amp; consent (required before "ready to submit")</b>
+    ${r.review.consentStale ? '<p style="color:#c33">⚠ Your answers changed since you last consented — please review again.</p>' : ''}
+    <label style="display:block;margin:.3rem 0"><input type="checkbox" id="revChk" ${r.review.reviewed?'checked':''}> I have reviewed this submission and it reflects my own work.</label>
+    <label style="display:block;margin:.3rem 0"><input type="checkbox" id="conChk" ${r.review.consented?'checked':''}> I consent to submitting this.</label>
+    <button onclick="consentSubmit('${id}')">Confirm review + consent</button>
+    <span id="consentStatus" class="muted" style="margin-left:.5rem">${r.review.readyToSubmit ? '✅ Ready to submit' : 'not yet ready'}</span>
+  </div>`;
+
+  document.getElementById('compile').innerHTML = html;
+}
+
+async function consentSubmit(id) {
+  const reviewed = document.getElementById('revChk').checked;
+  const consented = document.getElementById('conChk').checked;
+  const status = document.getElementById('consentStatus');
+  if (!reviewed || !consented) { status.textContent = 'tick both boxes first'; return; }
+  const r = await api('/assignments/' + id + '/compile/consent', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ reviewed, consented, contentHash: lastCompile?.contentHash })
+  });
+  if (r.error) { status.textContent = '✗ ' + r.error; if (r.code === 'STALE_CONSENT') compile(); return; }
+  status.textContent = r.review.readyToSubmit ? '✅ Ready to submit!' : 'recorded';
 }
 
 // --- Staged Lesson player (the main gamified flow) --------------------------

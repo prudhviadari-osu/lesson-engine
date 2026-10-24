@@ -1,70 +1,145 @@
-# learning++ (backend)
+# learning++ &nbsp;·&nbsp; `lesson-engine`
 
-Standalone Fastify + SQLite API that turns Canvas assignments into daily mini-lessons.
-The frontend is a **separate** static HTML/CSS/JS app (teammate's repo) that calls this API.
+Turn your Canvas assignments into short daily **mini-lessons** that actually teach
+you — then compile your own work into a submission. Built for students who are
+busy and tired of grinding homework alone.
 
-## Run (inside the Ubuntu VM)
+This repo is the **backend engine** (a Node + Fastify API). The user-facing
+website is a **separate** static HTML/CSS/JS app that calls this API. If you're
+building the frontend, start with **[`docs/INTEGRATION.md`](docs/INTEGRATION.md)** —
+it lists every endpoint and its JSON shapes.
+
+---
+
+## What it does (the 60-second version)
+
+1. **Ingest** an assignment (paste its text; Canvas auto-ingest is a later step).
+2. **Decompose** it with AI into a sequence of ~10–15 min lessons.
+3. **Find resources** — a relevant YouTube video + a reading excerpt (from an
+   uploaded textbook PDF, else Wikipedia).
+4. **Learn it** as a gamified **staged flow**: intro → watch → read → bite-size
+   challenges → draft the real deliverable, with **"Coach"** (an AI tutor) giving
+   live feedback and **never writing your answer for you**. XP, streak, progress.
+5. **Plan** lessons across days, backward from the due date, so you never cram.
+6. **Compile** your own answers into a submission bundle — behind a required
+   **review + consent** step, with a clear list of what's still left.
+
+The guiding principle: **make you genuinely learn, not copy-paste an AI answer.**
+
+---
+
+## Quick start
+
+> Prereqs: **Node.js 20+** (22 recommended) and **npm**. A free **Gemini API key**
+> ([aistudio.google.com/apikey](https://aistudio.google.com/apikey)). Optional: a
+> free **YouTube Data API v3 key** (Google Cloud Console).
 
 ```bash
-npm install
-cp .env.example .env     # then edit .env and paste your GEMINI_API_KEY
-npm run seed             # creates learning.db with one demo assignment
-npm start                # http://localhost:3000  (test harness at /)
+git clone https://github.com/prudhviadari-osu/lesson-engine.git
+cd lesson-engine
+npm install                 # compiles better-sqlite3 (needs build tools — see below)
+cp .env.example .env        # then edit .env and paste your GEMINI_API_KEY
+npm run seed                # create learning.db with a demo assignment
+npm start                   # → http://localhost:3000
 ```
 
-Get a free Gemini key at <https://aistudio.google.com/apikey>.
+Open **http://localhost:3000** for the built-in **test harness** — a plain page
+that lets you click through the whole pipeline (profile → paste assignment →
+decompose → find videos/reading → play the gamified lesson → compile). The
+harness is a debugging tool, **not** the real UI — that's the frontend repo.
 
-Open <http://localhost:3000> for the throwaway test harness: load today's plan,
-do a lesson (watch video / read excerpt / answer / flashcards), complete it,
-then compile the "submission".
+**On Linux**, `better-sqlite3` compiles native code, so you need build tools first:
+```bash
+sudo apt install -y build-essential python3
+```
 
-## Build status
+---
 
-- [x] **Step 1 — Spine:** Fastify + SQLite + CORS, schema, seed, test harness,
-      routes: `/health /courses /assignments/:id /lessons/:id /blocks/:id/answer
-      /lessons/:id/complete /assignments/:id/compile /plan`
-- [x] **Step 2 — Gemini decompose:** `POST /ingest/paste` + `POST /assignments/:id/decompose`.
-      Paste a real assignment -> Gemini returns structured lessons (video/excerpt/
-      scaffold_q/draft/flashcards). Responses cached in `resource_cache` (demo-safety).
-      Resource blocks (video/excerpt) carry a search query/topic, resolved in Step 3.
-- [x] **Step 3 — Resource-find:** `POST /assignments/:id/resources` resolves
-      video blocks via YouTube Data API (keyless fallback = search link) and
-      excerpt blocks via uploaded textbook PDF (`POST /assignments/:id/textbook`)
-      else Wikipedia. All results cached. YouTube needs `YOUTUBE_API_KEY`.
-- [x] **Users + learning prefs:** lightweight profiles (no passwords). `user`
-      table holds `display_name`, `learning_styles` (1-2 of visual/auditory/
-      reading/kinesthetic), `learning_notes` (free text). All data scoped to a
-      user; identity via `x-user-id` header or `?userId=`. Prefs are injected
-      into the Gemini decompose prompt to tailor the lesson mix.
-      Routes: `GET/POST/PATCH/DELETE /users[/:id]`.
-      Assignment CRUD: `GET /assignments`, `PATCH/DELETE /assignments/:id`.
-      **NOTE: schema changed — run `npm run seed` to rebuild `learning.db`.**
-- [x] **Step 4 — Planner + reflow:** deterministic scheduler (backward from due
-      date, submission buffer, daily cap, over-capacity flagged not crammed).
-      `POST /plan/reflow` (generate/reflow), `GET /plan` (scheduled days +
-      unscheduled backlog), `DELETE /plan/lessons/:id` (unschedule -> backlog),
-      `POST /plan/lessons/:id/reschedule`, `DELETE /plan` (clear all -> backlog).
-      Plan edits touch ONLY plan_entry — never lessons/answers — so compile
-      still reports unwritten work as "not done" regardless of the schedule.
-- [ ] Step 5 — Compile + review/consent
-- [x] **Interactive Tutor ("Coach"):** live multi-turn tutor (`generateText()`,
-      warm temp 0.9) that teaches in bites and reacts to the student's answers,
-      never writing them. `tutor_message` table. `GET/POST/DELETE /lessons/:id/tutor`.
-- [x] **Unified gamified STAGED LESSON FLOW (the main experience):** a lesson is
-      an ordered journey (intro → watch video → read excerpt → bite-size
-      challenges w/ instant feedback → draft the deliverable w/ Coach feedback →
-      complete), derived from existing blocks. Resolved video + reading surfaced
-      IN-flow. Gamification: XP per stage (5/10/10/15/25 + 20 bonus), lesson
-      progress %, daily XP goal (50), streak. New `user_xp` + `xp_event` tables
-      (RE-SEED needed). Routes: `GET /lessons/:id/flow`, `POST .../flow/advance`,
-      `.../flow/challenge`, `.../flow/draft`, `.../flow/complete`. Answers save to
-      the answer table BEFORE any Gemini call, so work/XP never lost on no-key or
-      overload — and compile stays answer-driven (verified).
-- [ ] Step 6 — Playwright ingestion
+## Configuration (`.env`)
 
-See `../SPEC.md` for the full plan.
+Copy `.env.example` → `.env` and fill it in. The only **required** value is
+`GEMINI_API_KEY`. Everything else has sane defaults. See `.env.example` for the
+full annotated list (model fallbacks, YouTube key, XP/goal dials, planner knobs).
 
-## Notes
-- CORS is wide-open (`origin: true`) for the hackathon so the teammate's static
-  page can call it from any origin. Tighten before real use.
-- DB file: `learning.db` (set `DB_PATH` to override). `npm run seed` resets it.
+**Never commit your real `.env`** — it's gitignored for a reason (it holds keys).
+
+### Gotchas we hit (so you don't have to)
+- **"model is no longer supported"** → Google rotated models. Change
+  `GEMINI_MODEL` in `.env` to a current one (e.g. `gemini-3.8-flash`) and restart.
+- **"high demand / overloaded"** → the free tier under load. The server auto-
+  retries and falls back to lighter models; usually just retry. Successful AI
+  results are **cached**, so re-running the same decompose is instant and offline.
+- **`no such column` SQL error after `git pull`** → the DB schema changed. Run
+  `npm run seed` to rebuild `learning.db`. (SQLite can't auto-add columns.)
+  Re-seeding wipes local data — it's only demo data.
+
+---
+
+## Project layout
+
+```
+src/
+  server.js            Fastify app: CORS, static harness, route registration
+  db/
+    schema.sql         full SQLite schema (source of truth)
+    index.js           DB connection + initSchema()
+    seed.js            demo fixture (1 user, 1 assignment, 2 lessons)
+  routes/index.js      ALL HTTP routes
+  services/
+    gemini.js          Gemini client: generateJSON + generateText, retry/fallback, cache
+    decompose.js       assignment → lessons (honors learning-style prefs)
+    youtube.js         YouTube video search (keyless fallback = search link)
+    reading.js         textbook-PDF excerpt match, else Wikipedia
+    resolve.js         fill video/reading blocks for an assignment
+    users.js           lightweight profiles + learning preferences
+    planner.js         schedule lessons backward from due date + reflow
+    tutor.js           "Coach" chat tutor (persona + sessions)
+    flow.js            the gamified STAGED LESSON FLOW + XP
+    compile.js         assemble submission + review/consent gate
+public/index.html      the test harness (debug UI)
+docs/
+  INTEGRATION.md       API contract for the frontend team  ← read this to build the UI
+SPEC.md                the original product spec
+```
+
+---
+
+## Scripts
+
+| Command | What it does |
+|---|---|
+| `npm start` | Run the API on `http://localhost:3000` |
+| `npm run dev` | Same, auto-restart on file changes |
+| `npm run seed` | (Re)build `learning.db` with the demo fixture |
+
+---
+
+## How it fits together (30-second mental model)
+
+- **`server.js`** wires up Fastify (CORS on), serves the test harness, and
+  registers all routes.
+- **`routes/index.js`** is the one place every HTTP endpoint lives. Each route is
+  thin: it figures out the user (`resolveUserId`) and calls a **service**.
+- **`services/`** is where the real logic is, one file per concern (see the
+  layout above). `gemini.js` is the shared AI client (used by decompose, tutor,
+  flow) with retry/fallback/caching built in.
+- **`db/`** — one SQLite file (`learning.db`); `schema.sql` is the source of
+  truth; everything is scoped to a user via `course.user_id`.
+- Data flow for a lesson: **paste → decompose (AI) → resources (YouTube/Wiki) →
+  staged flow (learn + answer) → compile (assemble your answers) → consent**.
+
+## For the team
+
+- **Frontend devs:** everything you need is in
+  [`docs/INTEGRATION.md`](docs/INTEGRATION.md) — endpoints, request/response
+  shapes, the `x-user-id` convention, CORS. You never need to read backend code.
+- **Product context:** [`SPEC.md`](SPEC.md).
+- **Backend:** each route in `src/routes/index.js` maps to a `src/services/*`
+  file — start there to add or change a feature.
+
+## Status
+
+Done: profiles + learning prefs · paste ingest · AI decompose · resource-find
+(YouTube + Wikipedia/PDF) · gamified staged lesson flow + "Coach" tutor ·
+planner + reflow · compile with review/consent gate.
+Next / experimental: Canvas auto-ingest (Playwright), multi-LMS, voice mode.
