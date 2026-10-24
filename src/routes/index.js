@@ -35,6 +35,7 @@ export async function registerRoutes(app) {
     } catch (err) {
       if (err.code === 'NOT_FOUND') return reply.code(404).send({ error: 'assignment not found' });
       if (err.code === 'NO_API_KEY') return reply.code(400).send({ error: err.message });
+      if (err.code === 'OVERLOADED') return reply.code(503).send({ error: err.message, retryable: true });
       app.log.error(err);
       return reply.code(502).send({ error: 'decompose failed', detail: err.message, raw: err.raw });
     }
