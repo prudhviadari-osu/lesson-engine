@@ -24,6 +24,26 @@
   <p class="muted">Throwaway UI to exercise the backend. API base:
     <input type="text" id="base" value="http://localhost:3000" /></p>
 
+  <div class="card" style="background:#f4f7ff">
+    <h2>👤 Profile (acts as "logged-in" user — sent as x-user-id on every call)</h2>
+    <div>
+      User: <select id="userSel" onchange="onUserChange()"></select>
+      <button class="ghost" onclick="newUserPrompt()">+ new profile</button>
+    </div>
+    <div style="margin-top:.5rem">
+      Learning styles (pick max 2):
+      <label><input type="checkbox" class="styleChk" value="visual"> visual</label>
+      <label><input type="checkbox" class="styleChk" value="auditory"> auditory</label>
+      <label><input type="checkbox" class="styleChk" value="reading"> reading</label>
+      <label><input type="checkbox" class="styleChk" value="kinesthetic"> kinesthetic</label>
+    </div>
+    <div style="margin-top:.4rem">
+      Notes: <input type="text" id="notes" placeholder="e.g. I like real-world examples" style="width:60%">
+      <button onclick="saveProfile()">Save profile</button>
+      <span id="profStatus" class="muted"></span>
+    </div>
+  </div>
+
   <div class="card">
     <h2>Paste an assignment &rarr; decompose (Gemini)</h2>
     <input type="text" id="pTitle" placeholder="Assignment title" style="width:100%; margin-bottom:.4rem" /><br>
@@ -58,7 +78,68 @@
 
 <script>
 const base = () => document.getElementById('base').value.replace(/\/$/, '');
-const api = (p, opts) => fetch(base() + p, opts).then(r => r.json());
+let currentUserId = null;
+const api = (p, opts = {}) => {
+  const headers = { ...(opts.headers || {}) };
+  if (currentUserId != null) headers['x-user-id'] = String(currentUserId);
+  return fetch(base() + p, { ...opts, headers }).then(r => r.json());
+};
+
+async function loadUsers() {
+  const { users } = await api('/users');
+  const sel = document.getElementById('userSel');
+  sel.innerHTML = users.map(u => `<option value="${u.id}">${u.displayName} [${u.learningStyles.join('+') || 'no style'}]</option>`).join('');
+  if (users.length) {
+    if (currentUserId == null) currentUserId = users[0].id;
+    sel.value = currentUserId;
+    applyUserToForm(users.find(u => u.id == currentUserId) || users[0]);
+  }
+}
+
+function applyUserToForm(u) {
+  document.querySelectorAll('.styleChk').forEach(c => { c.checked = u.learningStyles.includes(c.value); });
+  document.getElementById('notes').value = u.learningNotes || '';
+}
+
+async function onUserChange() {
+  currentUserId = Number(document.getElementById('userSel').value);
+  const u = await api('/users/' + currentUserId);
+  applyUserToForm(u);
+  loadPlan();
+}
+
+function selectedStyles() {
+  return [...document.querySelectorAll('.styleChk:checked')].map(c => c.value);
+}
+
+// enforce max-2 in the UI too
+document.addEventListener('change', (e) => {
+  if (e.target.classList?.contains('styleChk')) {
+    const checked = selectedStyles();
+    if (checked.length > 2) { e.target.checked = false; document.getElementById('profStatus').textContent = 'max 2 styles'; }
+  }
+});
+
+async function saveProfile() {
+  const styles = selectedStyles();
+  const notes = document.getElementById('notes').value;
+  const r = await api('/users/' + currentUserId, {
+    method: 'PATCH', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ learningStyles: styles, learningNotes: notes })
+  });
+  document.getElementById('profStatus').textContent = r.error ? ('✗ ' + r.error) : '✓ saved';
+  loadUsers();
+}
+
+async function newUserPrompt() {
+  const name = prompt('New profile name:');
+  if (!name) return;
+  const r = await api('/users', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ displayName: name, learningStyles: [], learningNotes: '' })
+  });
+  if (r.id) { currentUserId = r.id; await loadUsers(); }
+}
 
 async function loadPlan() {
   const plan = await api('/plan');
@@ -205,7 +286,7 @@ async function pasteResultRefresh(assignmentId) {
   ).join('');
 }
 
-loadPlan();
+loadUsers().then(loadPlan);
 </script>
 </body>
 </html>

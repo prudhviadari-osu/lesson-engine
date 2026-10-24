@@ -31,6 +31,14 @@ then compile the "submission".
       video blocks via YouTube Data API (keyless fallback = search link) and
       excerpt blocks via uploaded textbook PDF (`POST /assignments/:id/textbook`)
       else Wikipedia. All results cached. YouTube needs `YOUTUBE_API_KEY`.
+- [x] **Users + learning prefs:** lightweight profiles (no passwords). `user`
+      table holds `display_name`, `learning_styles` (1-2 of visual/auditory/
+      reading/kinesthetic), `learning_notes` (free text). All data scoped to a
+      user; identity via `x-user-id` header or `?userId=`. Prefs are injected
+      into the Gemini decompose prompt to tailor the lesson mix.
+      Routes: `GET/POST/PATCH/DELETE /users[/:id]`.
+      Assignment CRUD: `GET /assignments`, `PATCH/DELETE /assignments/:id`.
+      **NOTE: schema changed — run `npm run seed` to rebuild `learning.db`.**
 - [ ] Step 4 — Planner + reflow
 - [ ] Step 5 — Compile + review/consent
 - [ ] Step 6 — Playwright ingestion

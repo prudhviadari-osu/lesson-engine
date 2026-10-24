@@ -3,8 +3,19 @@
 
 PRAGMA foreign_keys = ON;
 
+-- Lightweight "profiles" (no passwords for the hackathon; real auth = v2).
+-- Learning preferences live here since they are per-user.
+CREATE TABLE IF NOT EXISTS user (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  display_name    TEXT NOT NULL,
+  learning_styles TEXT NOT NULL DEFAULT '[]', -- JSON array, 1-2 of: visual|auditory|reading|kinesthetic
+  learning_notes  TEXT NOT NULL DEFAULT '',   -- free-text "anything specific?"
+  created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS course (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     INTEGER REFERENCES user(id) ON DELETE CASCADE,
   canvas_id   TEXT,
   name        TEXT NOT NULL,
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
@@ -83,6 +94,7 @@ CREATE TABLE IF NOT EXISTS streak (
   completed_count INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE INDEX IF NOT EXISTS idx_course_user       ON course(user_id);
 CREATE INDEX IF NOT EXISTS idx_assignment_course ON assignment(course_id);
 CREATE INDEX IF NOT EXISTS idx_lesson_assignment ON lesson(assignment_id);
 CREATE INDEX IF NOT EXISTS idx_block_lesson       ON lesson_block(lesson_id);

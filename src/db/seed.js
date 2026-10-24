@@ -6,15 +6,20 @@ initSchema();
 
 const reset = db.transaction(() => {
   // Clear everything (dev convenience — fresh seed each run)
-  const tables = ['answer', 'plan_entry', 'lesson_block', 'lesson', 'attachment', 'assignment', 'course', 'streak'];
+  const tables = ['answer', 'plan_entry', 'lesson_block', 'lesson', 'attachment', 'assignment', 'course', 'streak', 'user'];
   for (const t of tables) db.prepare(`DELETE FROM ${t}`).run();
   // Reset AUTOINCREMENT counters so a fresh seed always yields stable IDs
-  // (assignment 1, lesson 1, blocks 1-6) — keeps the test harness/demo predictable.
+  // (user 1, assignment 1, lesson 1, blocks 1-6) — keeps the harness/demo predictable.
   db.prepare(`DELETE FROM sqlite_sequence WHERE name IN (${tables.map(() => '?').join(',')})`).run(...tables);
 
+  const user = db.prepare(
+    `INSERT INTO user (display_name, learning_styles, learning_notes) VALUES (?, ?, ?)`
+  ).run('Demo Student', JSON.stringify(['visual', 'kinesthetic']), 'I like real-world examples and learning by doing.');
+  const userId = user.lastInsertRowid;
+
   const course = db.prepare(
-    `INSERT INTO course (name, canvas_id) VALUES (?, ?)`
-  ).run('Calculus I (demo)', 'demo-course-1');
+    `INSERT INTO course (user_id, name, canvas_id) VALUES (?, ?, ?)`
+  ).run(userId, 'Calculus I (demo)', 'demo-course-1');
   const courseId = course.lastInsertRowid;
 
   // Due 7 days from now, in local-ish ISO
@@ -73,7 +78,7 @@ const reset = db.transaction(() => {
     rubricHint: 'Show each differentiation step.', savesTo: 'answer'
   }));
 
-  console.log(`Seeded course ${courseId}, assignment ${asgId} with 2 lessons.`);
+  console.log(`Seeded user ${userId} (Demo Student), course ${courseId}, assignment ${asgId} with 2 lessons.`);
 });
 
 reset();

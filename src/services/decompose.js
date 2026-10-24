@@ -54,11 +54,33 @@ const lessonSchema = {
   propertyOrdering: ['lessons'],
 };
 
-function buildPrompt(assignment) {
+const STYLE_GUIDANCE = {
+  visual: 'Favor "video" blocks and visual explanations. Prefer diagrams/animations described in video queries.',
+  auditory: 'Favor "video" blocks (to be heard) and phrase scaffold questions as if explaining aloud; lean on spoken/lecture-style content.',
+  reading: 'Favor "excerpt" reading blocks and written "scaffold_q" reflection; fewer videos.',
+  kinesthetic: 'Favor "draft" and hands-on practice blocks where the student DOES the work; more applied problems, earlier.',
+};
+
+function buildLearnerBlock(user) {
+  if (!user) return '';
+  const styles = Array.isArray(user.learningStyles) ? user.learningStyles : [];
+  const styleLines = styles.map((s) => `  - ${s}: ${STYLE_GUIDANCE[s] || ''}`).join('\n');
+  const notes = (user.learningNotes || '').trim();
+  if (!styles.length && !notes) return '';
+  return `
+LEARNER PROFILE (tailor the lesson mix to this student, WITHOUT ever writing their answers):
+${styles.length ? `Preferred learning style(s):\n${styleLines}` : 'No specific style preference.'}
+${notes ? `The student also says: "${notes}" — honor this in tone, pacing, and examples.` : ''}
+When two styles are given, blend them. Keep lessons ~10-15 min regardless of style.
+`;
+}
+
+function buildPrompt(assignment, user) {
   return `You are the lesson designer for "learning++", a study tool whose PURPOSE is to make
 students genuinely learn their coursework in small daily chunks — the OPPOSITE of
 copy-pasting an AI answer. You break an assignment into a sequence of ~10-15 minute
 mini-lessons a busy student can do on the go.
+${buildLearnerBlock(user)}
 
 STRICT RULES:
 - NEVER write the student's answer or the deliverable for them. "draft" blocks give an
@@ -98,7 +120,7 @@ Produce the lessons now.`;
  * Replaces any existing lessons for that assignment (idempotent re-decompose).
  * Returns the created lessons with blocks.
  */
-export async function decomposeAssignment(assignmentId) {
+export async function decomposeAssignment(assignmentId, user = null) {
   const assignment = db.prepare('SELECT * FROM assignment WHERE id = ?').get(assignmentId);
   if (!assignment) {
     const err = new Error('assignment not found');
@@ -106,10 +128,14 @@ export async function decomposeAssignment(assignmentId) {
     throw err;
   }
 
+  // Cache key includes the learner profile so different students get different
+  // (and separately-cached) lessons for the same assignment.
+  const profileKey = user ? JSON.stringify({ s: user.learningStyles, n: user.learningNotes }) : '';
+
   const { data, cached } = await generateJSON({
-    prompt: buildPrompt(assignment),
+    prompt: buildPrompt(assignment, user),
     schema: lessonSchema,
-    cacheKeyExtra: `decompose:${assignmentId}`,
+    cacheKeyExtra: `decompose:${assignmentId}:${profileKey}`,
   });
 
   const lessons = Array.isArray(data?.lessons) ? data.lessons : [];
