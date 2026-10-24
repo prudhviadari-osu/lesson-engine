@@ -27,7 +27,10 @@ then compile the "submission".
       Paste a real assignment -> Gemini returns structured lessons (video/excerpt/
       scaffold_q/draft/flashcards). Responses cached in `resource_cache` (demo-safety).
       Resource blocks (video/excerpt) carry a search query/topic, resolved in Step 3.
-- [ ] Step 3 — Resource-find (YouTube + PDF excerpt)
+- [x] **Step 3 — Resource-find:** `POST /assignments/:id/resources` resolves
+      video blocks via YouTube Data API (keyless fallback = search link) and
+      excerpt blocks via uploaded textbook PDF (`POST /assignments/:id/textbook`)
+      else Wikipedia. All results cached. YouTube needs `YOUTUBE_API_KEY`.
 - [ ] Step 4 — Planner + reflow
 - [ ] Step 5 — Compile + review/consent
 - [ ] Step 6 — Playwright ingestion

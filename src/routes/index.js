@@ -1,11 +1,18 @@
 import { db } from '../db/index.js';
 import { decomposeAssignment } from '../services/decompose.js';
+import { resolveResources } from '../services/resolve.js';
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const UPLOAD_DIR = join(__dirname, '..', '..', 'uploads');
 
 // Spine routes (SPEC §8). More arrive in later build steps:
 // resources, planner/reflow, compile/consent, ingestion.
 export async function registerRoutes(app) {
   // Health
-  app.get('/health', async () => ({ ok: true, service: 'learning++', step: 'decompose' }));
+  app.get('/health', async () => ({ ok: true, service: 'learning++', step: 'resources' }));
 
   // --- Ingest: manual paste (always-works fallback, SPEC §4) -----------------
   // Creates a course (if needed) + assignment from pasted text. No Canvas needed.
@@ -39,6 +46,39 @@ export async function registerRoutes(app) {
       app.log.error(err);
       return reply.code(502).send({ error: 'decompose failed', detail: err.message, raw: err.raw });
     }
+  });
+
+  // --- Resolve resources: fill video/excerpt blocks (SPEC §11 step 3) --------
+  app.post('/assignments/:id/resources', async (req, reply) => {
+    try {
+      return await resolveResources(req.params.id);
+    } catch (err) {
+      if (err.code === 'NOT_FOUND') return reply.code(404).send({ error: 'assignment not found' });
+      app.log.error(err);
+      return reply.code(502).send({ error: 'resource resolution failed', detail: err.message });
+    }
+  });
+
+  // --- Textbook PDF upload (multipart) ---------------------------------------
+  app.post('/assignments/:id/textbook', async (req, reply) => {
+    const asg = db.prepare('SELECT id FROM assignment WHERE id = ?').get(req.params.id);
+    if (!asg) return reply.code(404).send({ error: 'assignment not found' });
+
+    const file = await req.file();
+    if (!file) return reply.code(400).send({ error: 'no file uploaded (field name "file")' });
+
+    mkdirSync(UPLOAD_DIR, { recursive: true });
+    const safeName = `${Date.now()}-${file.filename.replace(/[^\w.\-]/g, '_')}`;
+    const localPath = join(UPLOAD_DIR, safeName);
+    const buf = await file.toBuffer();
+    writeFileSync(localPath, buf);
+
+    const res = db.prepare(
+      `INSERT INTO attachment (assignment_id, filename, local_path, mime, kind)
+       VALUES (?, ?, ?, ?, 'uploaded_textbook')`
+    ).run(asg.id, file.filename, localPath, file.mimetype || 'application/pdf');
+
+    return { ok: true, attachmentId: res.lastInsertRowid, filename: file.filename, bytes: buf.length };
   });
 
   // --- Courses + assignments -------------------------------------------------

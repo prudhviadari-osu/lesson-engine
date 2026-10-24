@@ -83,14 +83,15 @@ async function loadLesson(id) {
   for (const b of lesson.blocks) {
     html += `<div class="block"><span class="type">${b.type}</span><br>`;
     if (b.type === 'video') {
-      if (b.payload.resolved === false || !b.payload.url)
-        html += `🎬 <i>video to find:</i> "${b.payload.query}" <span class="muted">(resolved in Step 3)</span>`;
-      else html += `🎬 <a href="${b.payload.url}" target="_blank">${b.payload.title}</a> (${Math.round(b.payload.durationSec/60)} min)`;
+      const p = b.payload;
+      if (p.embedUrl) html += `🎬 <b>${p.title}</b> <span class="muted">${p.channel||''}</span><br><iframe width="100%" height="220" src="${p.embedUrl}" frameborder="0" allowfullscreen style="margin-top:.4rem;border-radius:8px"></iframe>`;
+      else if (p.url) html += `🎬 <a href="${p.url}" target="_blank">${p.title || p.query}</a>${p.resolved===false ? ' <span class="muted">(search link — add YOUTUBE_API_KEY to auto-pick)</span>' : ''}`;
+      else html += `🎬 <i>video to find:</i> "${p.query}" <span class="muted">(click "Find videos + reading")</span>`;
     }
     else if (b.type === 'excerpt') {
-      if (b.payload.resolved === false || !b.payload.text)
-        html += `📖 <i>textbook excerpt to find:</i> "${b.payload.topic}" <span class="muted">(resolved in Step 3)</span>`;
-      else html += `📖 <b>${b.payload.heading}</b><br>${b.payload.text}`;
+      const p = b.payload;
+      if (p.text) html += `📖 <b>${p.heading||p.topic}</b> <span class="muted">(${p.source||'reading'})</span><br>${p.text}${p.url?`<br><a href="${p.url}" target="_blank">read more →</a>`:''}`;
+      else html += `📖 <i>reading to find:</i> "${p.topic}" <span class="muted">(click "Find videos + reading"${p.url?`, or <a href="${p.url}" target="_blank">search</a>`:''})</span>`;
     }
     else if (b.type === 'flashcards') html += b.payload.cards.map(c =>
       `<div class="flash" onclick="this.classList.toggle('show')"><b>${c.front}</b><div class="back">${c.back}</div></div>`).join('');
@@ -155,8 +156,11 @@ async function pasteAndDecompose() {
   status.textContent = 'decomposing with Gemini (a few seconds)...';
   const dec = await api('/assignments/' + ing.assignmentId + '/decompose', { method: 'POST' });
   if (dec.error) { status.textContent = 'decompose error: ' + dec.error + (dec.detail ? ' — ' + dec.detail : ''); return; }
-  status.textContent = `✓ ${dec.lessonCount} lessons created${dec.cached ? ' (from cache)' : ''}. Assignment id ${ing.assignmentId}.`;
+  status.innerHTML = `✓ ${dec.lessonCount} lessons created${dec.cached ? ' (from cache)' : ''}. Assignment id ${ing.assignmentId}. ` +
+    `<button onclick="resolveResources(${ing.assignmentId})">🔎 Find videos + reading</button> ` +
+    `<label class="ghost" style="border:1px solid #357;color:#357;padding:.3rem .6rem;border-radius:6px;cursor:pointer">📄 Upload textbook PDF<input type="file" accept="application/pdf" style="display:none" onchange="uploadTextbook(${ing.assignmentId}, this)"></label>`;
   document.getElementById('asgId').value = ing.assignmentId;
+  window._lastAssignmentId = ing.assignmentId;
   document.getElementById('pResult').innerHTML = dec.lessons.map(l =>
     `<details class="block" style="padding:.6rem .8rem">
        <summary style="cursor:pointer"><b>Lesson ${l.seq}: ${l.title}</b> (${l.est_minutes} min) — ${l.blocks.length} blocks</summary>
@@ -166,6 +170,39 @@ async function pasteAndDecompose() {
      </details>`
   ).join('');
   loadPlan();
+}
+
+async function uploadTextbook(assignmentId, input) {
+  const f = input.files[0];
+  if (!f) return;
+  const status = document.getElementById('pStatus');
+  const fd = new FormData();
+  fd.append('file', f);
+  status.insertAdjacentHTML('beforeend', ' <span>uploading PDF…</span>');
+  const r = await api('/assignments/' + assignmentId + '/textbook', { method: 'POST', body: fd });
+  status.insertAdjacentHTML('beforeend', r.ok ? ` ✓ textbook "${r.filename}" uploaded (reading will use it)` : ' ✗ upload failed');
+}
+
+async function resolveResources(assignmentId) {
+  const status = document.getElementById('pStatus');
+  status.insertAdjacentHTML('beforeend', ' <span>resolving resources…</span>');
+  const r = await api('/assignments/' + assignmentId + '/resources', { method: 'POST' });
+  if (r.error) { status.insertAdjacentHTML('beforeend', ' ✗ ' + r.error); return; }
+  status.insertAdjacentHTML('beforeend',
+    ` ✓ videos: ${r.resolvedVideos}/${r.totalResourceBlocks}, reading resolved: ${r.resolvedReadings}. Reopen a lesson to see them.`);
+  pasteResultRefresh(assignmentId);
+}
+
+async function pasteResultRefresh(assignmentId) {
+  const a = await api('/assignments/' + assignmentId);
+  if (a.error) return;
+  const lessonsFull = await Promise.all((a.lessons||[]).map(l => api('/lessons/' + l.id)));
+  document.getElementById('pResult').innerHTML = lessonsFull.map(l =>
+    `<details class="block" style="padding:.6rem .8rem">
+       <summary style="cursor:pointer"><b>Lesson ${l.seq}: ${l.title}</b> (${l.est_minutes} min)</summary>
+       <div style="margin-top:.5rem">` + l.blocks.map(b => renderBlockPreview(b)).join('') +
+       `<button class="ghost" onclick="loadLesson(${l.id})">open in player ↓</button></div></details>`
+  ).join('');
 }
 
 loadPlan();

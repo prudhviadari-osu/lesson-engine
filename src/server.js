@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -16,6 +17,9 @@ const app = Fastify({ logger: true });
 // CORS wide-open for the hackathon so the teammate's static page (any origin,
 // including file://) can call the API. Tighten before anything real ships.
 await app.register(cors, { origin: true });
+
+// PDF textbook uploads (cap ~25MB)
+await app.register(multipart, { limits: { fileSize: 25 * 1024 * 1024 } });
 
 // Serve the throwaway test harness at /  (SPEC §9)
 await app.register(fastifyStatic, {
