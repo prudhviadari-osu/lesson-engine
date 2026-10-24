@@ -127,6 +127,20 @@ async function compile() {
      <pre>${r.compiledText.replace(/</g,'&lt;')}</pre>`;
 }
 
+// Compact inline preview of a block's generated content (so you can read what
+// Gemini produced without opening the player).
+function renderBlockPreview(b) {
+  const p = b.payload;
+  let body = '';
+  if (b.type === 'video') body = `🎬 find video: "<i>${p.query || ''}</i>"`;
+  else if (b.type === 'excerpt') body = `📖 textbook topic: "<i>${p.topic || ''}</i>"`;
+  else if (b.type === 'scaffold_q') body = `❓ ${p.prompt || ''}${p.hint ? `<br><span class="muted">hint: ${p.hint}</span>` : ''}`;
+  else if (b.type === 'draft') body = `✍️ <b>${p.instruction || ''}</b>${p.rubricHint ? `<br><span class="muted">rubric: ${p.rubricHint}</span>` : ''}`;
+  else if (b.type === 'flashcards') body = `🃏 ${(p.cards || []).map(c => c.front).join(' · ')}`;
+  return `<div style="border-left:3px solid #cde; padding:.25rem .6rem; margin:.35rem 0; font-size:.92em">
+            <span class="type">${b.type}</span><br>${body}</div>`;
+}
+
 async function pasteAndDecompose() {
   const title = document.getElementById('pTitle').value.trim();
   const text = document.getElementById('pText').value.trim();
@@ -144,9 +158,12 @@ async function pasteAndDecompose() {
   status.textContent = `✓ ${dec.lessonCount} lessons created${dec.cached ? ' (from cache)' : ''}. Assignment id ${ing.assignmentId}.`;
   document.getElementById('asgId').value = ing.assignmentId;
   document.getElementById('pResult').innerHTML = dec.lessons.map(l =>
-    `<div class="block"><b>Lesson ${l.seq}: ${l.title}</b> (${l.est_minutes} min)<br>` +
-    l.blocks.map(b => `<span class="type">${b.type}</span>`).join(' · ') +
-    ` <button class="ghost" onclick="loadLesson(${l.id})">open</button></div>`
+    `<details class="block" style="padding:.6rem .8rem">
+       <summary style="cursor:pointer"><b>Lesson ${l.seq}: ${l.title}</b> (${l.est_minutes} min) — ${l.blocks.length} blocks</summary>
+       <div style="margin-top:.5rem">` +
+       l.blocks.map(b => renderBlockPreview(b)).join('') +
+       `<button class="ghost" onclick="loadLesson(${l.id})">open in player ↓</button></div>
+     </details>`
   ).join('');
   loadPlan();
 }
