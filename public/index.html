@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>learning++ — API test harness</title>
+  <style>
+    body { font: 15px/1.5 system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+    h1 { font-size: 1.4rem; } h2 { font-size: 1.05rem; margin-top: 1.6rem; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 1rem; margin: .8rem 0; }
+    .block { border-left: 3px solid #6c8; padding: .4rem .8rem; margin: .6rem 0; background: #f7faf8; }
+    .block .type { font-size: .75rem; text-transform: uppercase; color: #688; letter-spacing: .05em; }
+    button { font: inherit; padding: .4rem .8rem; border: 1px solid #357; background: #357; color: #fff; border-radius: 6px; cursor: pointer; }
+    button.ghost { background: #fff; color: #357; }
+    textarea { width: 100%; min-height: 54px; font: inherit; padding: .4rem; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
+    input[type=text] { font: inherit; padding: .3rem; border: 1px solid #ccc; border-radius: 6px; width: 60%; }
+    pre { background: #1e1e1e; color: #ddd; padding: .8rem; border-radius: 8px; overflow: auto; white-space: pre-wrap; }
+    .muted { color: #777; } .flash { background:#fff8e0; border:1px solid #e8d080; }
+    .flash .back { display:none; } .flash.show .back { display:block; margin-top:.3rem; color:#555; }
+  </style>
+</head>
+<body>
+  <h1>learning++ <span class="muted">· API test harness</span></h1>
+  <p class="muted">Throwaway UI to exercise the backend. API base:
+    <input type="text" id="base" value="http://localhost:3000" /></p>
+
+  <div class="card">
+    <h2>Plan (today)</h2>
+    <button onclick="loadPlan()">GET /plan</button>
+    <div id="plan"></div>
+  </div>
+
+  <div class="card">
+    <h2>Lesson player</h2>
+    <div class="muted">Click a lesson in the plan above, or load by id:
+      <input type="text" id="lessonId" value="1" style="width:4rem" />
+      <button class="ghost" onclick="loadLesson()">Load</button></div>
+    <div id="lesson"></div>
+  </div>
+
+  <div class="card">
+    <h2>Compile "submission"</h2>
+    Assignment id: <input type="text" id="asgId" value="1" style="width:4rem" />
+    <button onclick="compile()">GET /compile</button>
+    <div id="compile"></div>
+  </div>
+
+<script>
+const base = () => document.getElementById('base').value.replace(/\/$/, '');
+const api = (p, opts) => fetch(base() + p, opts).then(r => r.json());
+
+async function loadPlan() {
+  const plan = await api('/plan');
+  const el = document.getElementById('plan');
+  const day = plan.days[0];
+  el.innerHTML = `<p>🔥 streak today: <b>${plan.todayStreak}</b> · load: <b>${day.loadMinutes} min</b>
+    ${day.overCapacity ? '<span style="color:#c33">⚠ over capacity</span>' : ''}</p>`;
+  el.innerHTML += day.lessons.map(l =>
+    `<div class="block"><span class="type">${l.assignment}</span><br>
+      <b>${l.title}</b> — ${l.estMinutes} min
+      <button class="ghost" onclick="loadLesson(${l.lessonId})">Do this now</button></div>`
+  ).join('') || '<p class="muted">No lessons left today 🎉</p>';
+}
+
+async function loadLesson(id) {
+  if (id) document.getElementById('lessonId').value = id;
+  id = document.getElementById('lessonId').value;
+  const lesson = await api('/lessons/' + id);
+  const el = document.getElementById('lesson');
+  if (lesson.error) { el.innerHTML = '<p class="muted">' + lesson.error + '</p>'; return; }
+  let html = `<h3>${lesson.title} <span class="muted">(${lesson.est_minutes} min · ${lesson.status})</span></h3>`;
+  for (const b of lesson.blocks) {
+    html += `<div class="block"><span class="type">${b.type}</span><br>`;
+    if (b.type === 'video') html += `🎬 <a href="${b.payload.url}" target="_blank">${b.payload.title}</a> (${Math.round(b.payload.durationSec/60)} min)`;
+    else if (b.type === 'excerpt') html += `📖 <b>${b.payload.heading}</b><br>${b.payload.text}`;
+    else if (b.type === 'flashcards') html += b.payload.cards.map(c =>
+      `<div class="flash" onclick="this.classList.toggle('show')"><b>${c.front}</b><div class="back">${c.back}</div></div>`).join('');
+    else if (b.type === 'scaffold_q' || b.type === 'draft') {
+      const label = b.payload.prompt || b.payload.instruction;
+      html += `${label}<br><textarea id="ans-${b.id}" placeholder="your answer..."></textarea>
+        <button onclick="saveAnswer(${b.id})">Save answer</button> <span id="saved-${b.id}" class="muted"></span>`;
+    }
+    html += `</div>`;
+  }
+  html += `<button onclick="completeLesson(${lesson.id})">✓ Complete lesson</button>`;
+  el.innerHTML = html;
+}
+
+async function saveAnswer(blockId) {
+  const content = document.getElementById('ans-' + blockId).value;
+  const r = await api('/blocks/' + blockId + '/answer', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ content })
+  });
+  document.getElementById('saved-' + blockId).textContent = r.ok ? '✓ saved' : 'error';
+}
+
+async function completeLesson(id) {
+  await api('/lessons/' + id + '/complete', { method: 'POST' });
+  loadPlan();
+}
+
+async function compile() {
+  const id = document.getElementById('asgId').value;
+  const r = await api('/assignments/' + id + '/compile');
+  document.getElementById('compile').innerHTML =
+    `<p>${r.complete ? '✅ complete' : '🟡 missing ' + r.missing.length + ' item(s)'}</p>
+     <pre>${r.compiledText.replace(/</g,'&lt;')}</pre>`;
+}
+
+loadPlan();
+</script>
+</body>
+</html>

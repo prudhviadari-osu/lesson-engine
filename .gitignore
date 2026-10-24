@@ -1,0 +1,6 @@
+node_modules/
+learning.db
+learning.db-shm
+learning.db-wal
+*.log
+.env
