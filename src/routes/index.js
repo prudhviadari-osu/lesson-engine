@@ -1,10 +1,44 @@
 import { db } from '../db/index.js';
+import { decomposeAssignment } from '../services/decompose.js';
 
 // Spine routes (SPEC §8). More arrive in later build steps:
-// decompose, resources, planner/reflow, compile/consent, ingestion.
+// resources, planner/reflow, compile/consent, ingestion.
 export async function registerRoutes(app) {
   // Health
-  app.get('/health', async () => ({ ok: true, service: 'learning++', step: 'spine' }));
+  app.get('/health', async () => ({ ok: true, service: 'learning++', step: 'decompose' }));
+
+  // --- Ingest: manual paste (always-works fallback, SPEC §4) -----------------
+  // Creates a course (if needed) + assignment from pasted text. No Canvas needed.
+  app.post('/ingest/paste', async (req, reply) => {
+    const { title, text, courseName, dueAt, points, submissionType } = req.body ?? {};
+    if (!title || !text) {
+      return reply.code(400).send({ error: 'title and text are required' });
+    }
+    // Reuse a "Pasted assignments" course, or make one.
+    let course = db.prepare("SELECT * FROM course WHERE name = ?").get(courseName || 'Pasted assignments');
+    if (!course) {
+      const r = db.prepare('INSERT INTO course (name) VALUES (?)').run(courseName || 'Pasted assignments');
+      course = { id: r.lastInsertRowid };
+    }
+    const res = db.prepare(
+      `INSERT INTO assignment (course_id, title, description_text, due_at, points, submission_type, source, status)
+       VALUES (?, ?, ?, ?, ?, ?, 'paste', 'ingested')`
+    ).run(course.id, title, text, dueAt || null, points ?? null, submissionType || 'online_text_entry');
+    return { ok: true, assignmentId: res.lastInsertRowid, courseId: course.id };
+  });
+
+  // --- Decompose: assignment -> lessons via Gemini (SPEC §11 step 2) ---------
+  app.post('/assignments/:id/decompose', async (req, reply) => {
+    try {
+      const result = await decomposeAssignment(req.params.id);
+      return result;
+    } catch (err) {
+      if (err.code === 'NOT_FOUND') return reply.code(404).send({ error: 'assignment not found' });
+      if (err.code === 'NO_API_KEY') return reply.code(400).send({ error: err.message });
+      app.log.error(err);
+      return reply.code(502).send({ error: 'decompose failed', detail: err.message, raw: err.raw });
+    }
+  });
 
   // --- Courses + assignments -------------------------------------------------
   app.get('/courses', async () => {

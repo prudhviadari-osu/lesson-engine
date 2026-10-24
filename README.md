@@ -7,9 +7,12 @@ The frontend is a **separate** static HTML/CSS/JS app (teammate's repo) that cal
 
 ```bash
 npm install
-npm run seed     # creates learning.db with one demo assignment
-npm start        # http://localhost:3000  (test harness at /)
+cp .env.example .env     # then edit .env and paste your GEMINI_API_KEY
+npm run seed             # creates learning.db with one demo assignment
+npm start                # http://localhost:3000  (test harness at /)
 ```
+
+Get a free Gemini key at <https://aistudio.google.com/apikey>.
 
 Open <http://localhost:3000> for the throwaway test harness: load today's plan,
 do a lesson (watch video / read excerpt / answer / flashcards), complete it,
@@ -20,7 +23,10 @@ then compile the "submission".
 - [x] **Step 1 — Spine:** Fastify + SQLite + CORS, schema, seed, test harness,
       routes: `/health /courses /assignments/:id /lessons/:id /blocks/:id/answer
       /lessons/:id/complete /assignments/:id/compile /plan`
-- [ ] Step 2 — Gemini decompose
+- [x] **Step 2 — Gemini decompose:** `POST /ingest/paste` + `POST /assignments/:id/decompose`.
+      Paste a real assignment -> Gemini returns structured lessons (video/excerpt/
+      scaffold_q/draft/flashcards). Responses cached in `resource_cache` (demo-safety).
+      Resource blocks (video/excerpt) carry a search query/topic, resolved in Step 3.
 - [ ] Step 3 — Resource-find (YouTube + PDF excerpt)
 - [ ] Step 4 — Planner + reflow
 - [ ] Step 5 — Compile + review/consent

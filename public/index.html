@@ -25,6 +25,17 @@
     <input type="text" id="base" value="http://localhost:3000" /></p>
 
   <div class="card">
+    <h2>Paste an assignment &rarr; decompose (Gemini)</h2>
+    <input type="text" id="pTitle" placeholder="Assignment title" style="width:100%; margin-bottom:.4rem" /><br>
+    <textarea id="pText" placeholder="Paste the full assignment description / instructions here..." style="min-height:90px"></textarea>
+    <div style="margin-top:.4rem">
+      <button onclick="pasteAndDecompose()">Ingest + Decompose</button>
+      <span id="pStatus" class="muted"></span>
+    </div>
+    <div id="pResult"></div>
+  </div>
+
+  <div class="card">
     <h2>Plan (today)</h2>
     <button onclick="loadPlan()">GET /plan</button>
     <div id="plan"></div>
@@ -71,8 +82,16 @@ async function loadLesson(id) {
   let html = `<h3>${lesson.title} <span class="muted">(${lesson.est_minutes} min · ${lesson.status})</span></h3>`;
   for (const b of lesson.blocks) {
     html += `<div class="block"><span class="type">${b.type}</span><br>`;
-    if (b.type === 'video') html += `🎬 <a href="${b.payload.url}" target="_blank">${b.payload.title}</a> (${Math.round(b.payload.durationSec/60)} min)`;
-    else if (b.type === 'excerpt') html += `📖 <b>${b.payload.heading}</b><br>${b.payload.text}`;
+    if (b.type === 'video') {
+      if (b.payload.resolved === false || !b.payload.url)
+        html += `🎬 <i>video to find:</i> "${b.payload.query}" <span class="muted">(resolved in Step 3)</span>`;
+      else html += `🎬 <a href="${b.payload.url}" target="_blank">${b.payload.title}</a> (${Math.round(b.payload.durationSec/60)} min)`;
+    }
+    else if (b.type === 'excerpt') {
+      if (b.payload.resolved === false || !b.payload.text)
+        html += `📖 <i>textbook excerpt to find:</i> "${b.payload.topic}" <span class="muted">(resolved in Step 3)</span>`;
+      else html += `📖 <b>${b.payload.heading}</b><br>${b.payload.text}`;
+    }
     else if (b.type === 'flashcards') html += b.payload.cards.map(c =>
       `<div class="flash" onclick="this.classList.toggle('show')"><b>${c.front}</b><div class="back">${c.back}</div></div>`).join('');
     else if (b.type === 'scaffold_q' || b.type === 'draft') {
@@ -106,6 +125,30 @@ async function compile() {
   document.getElementById('compile').innerHTML =
     `<p>${r.complete ? '✅ complete' : '🟡 missing ' + r.missing.length + ' item(s)'}</p>
      <pre>${r.compiledText.replace(/</g,'&lt;')}</pre>`;
+}
+
+async function pasteAndDecompose() {
+  const title = document.getElementById('pTitle').value.trim();
+  const text = document.getElementById('pText').value.trim();
+  const status = document.getElementById('pStatus');
+  if (!title || !text) { status.textContent = 'need a title and text'; return; }
+  status.textContent = 'ingesting...';
+  const ing = await api('/ingest/paste', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ title, text })
+  });
+  if (!ing.ok) { status.textContent = 'ingest error: ' + (ing.error || '?'); return; }
+  status.textContent = 'decomposing with Gemini (a few seconds)...';
+  const dec = await api('/assignments/' + ing.assignmentId + '/decompose', { method: 'POST' });
+  if (dec.error) { status.textContent = 'decompose error: ' + dec.error + (dec.detail ? ' — ' + dec.detail : ''); return; }
+  status.textContent = `✓ ${dec.lessonCount} lessons created${dec.cached ? ' (from cache)' : ''}. Assignment id ${ing.assignmentId}.`;
+  document.getElementById('asgId').value = ing.assignmentId;
+  document.getElementById('pResult').innerHTML = dec.lessons.map(l =>
+    `<div class="block"><b>Lesson ${l.seq}: ${l.title}</b> (${l.est_minutes} min)<br>` +
+    l.blocks.map(b => `<span class="type">${b.type}</span>`).join(' · ') +
+    ` <button class="ghost" onclick="loadLesson(${l.id})">open</button></div>`
+  ).join('');
+  loadPlan();
 }
 
 loadPlan();
