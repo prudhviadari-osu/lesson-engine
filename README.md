@@ -47,14 +47,19 @@ then compile the "submission".
       Plan edits touch ONLY plan_entry — never lessons/answers — so compile
       still reports unwritten work as "not done" regardless of the schedule.
 - [ ] Step 5 — Compile + review/consent
-- [~] **Interactive Tutor (PROTOTYPE):** "Coach" — a live multi-turn tutor per
-      lesson that teaches in small bites and reacts to the student's actual typed
-      answers (never writes their answer). Blend of encouraging human tutor +
-      bite-size challenge. `generateText()` added to gemini.js (non-schema, warm
-      temp 0.9, shared retry/fallback). New `tutor_message` table (RE-SEED needed).
-      Routes: `GET/POST/DELETE /lessons/:id/tutor`, `POST /lessons/:id/tutor/start`.
-      Playable in the harness ("🎮 Interactive Tutor"). Sits ALONGSIDE the static
-      block model — calibration prototype, not yet a replacement.
+- [x] **Interactive Tutor ("Coach"):** live multi-turn tutor (`generateText()`,
+      warm temp 0.9) that teaches in bites and reacts to the student's answers,
+      never writing them. `tutor_message` table. `GET/POST/DELETE /lessons/:id/tutor`.
+- [x] **Unified gamified STAGED LESSON FLOW (the main experience):** a lesson is
+      an ordered journey (intro → watch video → read excerpt → bite-size
+      challenges w/ instant feedback → draft the deliverable w/ Coach feedback →
+      complete), derived from existing blocks. Resolved video + reading surfaced
+      IN-flow. Gamification: XP per stage (5/10/10/15/25 + 20 bonus), lesson
+      progress %, daily XP goal (50), streak. New `user_xp` + `xp_event` tables
+      (RE-SEED needed). Routes: `GET /lessons/:id/flow`, `POST .../flow/advance`,
+      `.../flow/challenge`, `.../flow/draft`, `.../flow/complete`. Answers save to
+      the answer table BEFORE any Gemini call, so work/XP never lost on no-key or
+      overload — and compile stays answer-driven (verified).
 - [ ] Step 6 — Playwright ingestion
 
 See `../SPEC.md` for the full plan.

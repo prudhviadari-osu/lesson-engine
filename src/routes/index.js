@@ -10,6 +10,9 @@ import {
 import {
   startSession, sendMessage, getHistory, resetSession, getLessonContext,
 } from '../services/tutor.js';
+import {
+  getFlow, advanceStage, submitChallenge, submitDraft, completeFlow,
+} from '../services/flow.js';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -21,7 +24,7 @@ const UPLOAD_DIR = join(__dirname, '..', '..', 'uploads');
 // resources, planner/reflow, compile/consent, ingestion.
 export async function registerRoutes(app) {
   // Health
-  app.get('/health', async () => ({ ok: true, service: 'learning++', step: 'tutor-prototype' }));
+  app.get('/health', async () => ({ ok: true, service: 'learning++', step: 'staged-flow' }));
 
   // --- Users / profiles (lightweight; no passwords) --------------------------
   app.get('/users', async () => ({ users: listUsers() }));
@@ -285,6 +288,94 @@ export async function registerRoutes(app) {
     const userId = resolveUserId(req);
     const cleared = resetSession(req.params.id, userId);
     return { ok: true, cleared };
+  });
+
+  // --- Staged lesson flow (the MAIN gamified lesson experience) --------------
+  // A lesson rendered as an ordered JOURNEY (intro -> watch -> read -> challenge
+  // -> draft -> complete) derived from its existing blocks at request time. The
+  // resolved video + reading are surfaced INSIDE their stages. Gamification (XP
+  // per stage, lesson progress %, daily XP goal, streak) lives in user_xp +
+  // xp_event. This is ADDITIVE: static blocks, answers, and the chat tutor all
+  // still work underneath and feed these stages. Deriving stages + progress + XP
+  // needs NO live key; only the Coach feedback on challenge/draft does.
+
+  // Full staged flow + this user's progress. No live API call — always safe.
+  app.get('/lessons/:id/flow', async (req, reply) => {
+    try {
+      const userId = resolveUserId(req);
+      const user = userId ? getUser(userId) : null;
+      return getFlow(req.params.id, user);
+    } catch (err) {
+      if (err.code === 'NOT_FOUND') return reply.code(404).send({ error: 'lesson not found' });
+      app.log.error(err);
+      return reply.code(502).send({ error: 'flow failed', detail: err.message });
+    }
+  });
+
+  // Advance a passive stage (intro / video / reading): marks it done + awards XP.
+  app.post('/lessons/:id/flow/advance', async (req, reply) => {
+    try {
+      const userId = resolveUserId(req);
+      const user = userId ? getUser(userId) : null;
+      const { stageKey } = req.body ?? {};
+      if (!stageKey) return reply.code(400).send({ error: 'stageKey is required' });
+      return advanceStage(req.params.id, user, stageKey);
+    } catch (err) {
+      if (err.code === 'NOT_FOUND') return reply.code(404).send({ error: err.message });
+      if (err.code === 'BAD_INPUT') return reply.code(400).send({ error: err.message });
+      app.log.error(err);
+      return reply.code(502).send({ error: 'advance failed', detail: err.message });
+    }
+  });
+
+  // Submit a CHALLENGE answer -> instant Coach feedback (correct/try-again) + XP.
+  // scaffold challenges save the student's words to the answer table (compile!).
+  app.post('/lessons/:id/flow/challenge', async (req, reply) => {
+    try {
+      const userId = resolveUserId(req);
+      const user = userId ? getUser(userId) : null;
+      const { stageKey, answer } = req.body ?? {};
+      if (!stageKey) return reply.code(400).send({ error: 'stageKey is required' });
+      return await submitChallenge(req.params.id, user, stageKey, answer);
+    } catch (err) {
+      if (err.code === 'NOT_FOUND') return reply.code(404).send({ error: err.message });
+      if (err.code === 'BAD_INPUT') return reply.code(400).send({ error: err.message });
+      if (err.code === 'NO_API_KEY') return reply.code(400).send({ error: err.message, code: 'NO_API_KEY' });
+      if (err.code === 'OVERLOADED') return reply.code(503).send({ error: err.message, retryable: true });
+      app.log.error(err);
+      return reply.code(502).send({ error: 'challenge failed', detail: err.message });
+    }
+  });
+
+  // Submit a DRAFT -> saved to the answer table + Coach feedback (never rewrites).
+  app.post('/lessons/:id/flow/draft', async (req, reply) => {
+    try {
+      const userId = resolveUserId(req);
+      const user = userId ? getUser(userId) : null;
+      const { stageKey, content } = req.body ?? {};
+      if (!stageKey) return reply.code(400).send({ error: 'stageKey is required' });
+      return await submitDraft(req.params.id, user, stageKey, content);
+    } catch (err) {
+      if (err.code === 'NOT_FOUND') return reply.code(404).send({ error: err.message });
+      if (err.code === 'BAD_INPUT') return reply.code(400).send({ error: err.message });
+      if (err.code === 'NO_API_KEY') return reply.code(400).send({ error: err.message, code: 'NO_API_KEY' });
+      if (err.code === 'OVERLOADED') return reply.code(503).send({ error: err.message, retryable: true });
+      app.log.error(err);
+      return reply.code(502).send({ error: 'draft failed', detail: err.message });
+    }
+  });
+
+  // Complete the flow: mark lesson done + bump streak + award completion bonus.
+  app.post('/lessons/:id/flow/complete', async (req, reply) => {
+    try {
+      const userId = resolveUserId(req);
+      const user = userId ? getUser(userId) : null;
+      return completeFlow(req.params.id, user);
+    } catch (err) {
+      if (err.code === 'NOT_FOUND') return reply.code(404).send({ error: 'lesson not found' });
+      app.log.error(err);
+      return reply.code(502).send({ error: 'complete failed', detail: err.message });
+    }
   });
 
   // --- Compile (spine stub: assemble current answers + what's missing) -------

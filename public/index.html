@@ -64,8 +64,25 @@
     <div id="backlog"></div>
   </div>
 
+  <div class="card" style="background:#f3fff6; border-color:#8dcd9f">
+    <h2>🚀 Staged Lesson (the real experience) — gamified journey</h2>
+    <div class="muted">Walk a lesson stage-by-stage: intro → watch the video → read the excerpt →
+      bite-size challenges with instant feedback → draft the deliverable (Coach reacts) → complete.
+      XP, progress bar + daily goal included. Coach feedback on challenge/draft needs GEMINI_API_KEY;
+      everything else works without it.</div>
+    <div style="margin-top:.5rem">
+      Lesson id: <input type="text" id="flowLessonId" value="1" style="width:4rem" />
+      <button onclick="flowStart()">▶ Play staged lesson</button>
+      <button class="ghost" onclick="loadFlow()">refresh</button>
+      <span id="flowStatus" class="muted"></span>
+    </div>
+    <div id="flowBars" style="margin-top:.7rem"></div>
+    <div id="flowStage" style="margin-top:.7rem"></div>
+    <div id="flowNav" style="margin-top:.6rem"></div>
+  </div>
+
   <div class="card">
-    <h2>Lesson player</h2>
+    <h2>Lesson player <span class="muted">(debug — raw blocks)</span></h2>
     <div class="muted">Click a lesson in the plan above, or load by id:
       <input type="text" id="lessonId" value="1" style="width:4rem" />
       <button class="ghost" onclick="loadLesson()">Load</button></div>
@@ -268,6 +285,184 @@ async function compile() {
   document.getElementById('compile').innerHTML =
     `<p>${r.complete ? '✅ complete' : '🟡 missing ' + r.missing.length + ' item(s)'}</p>
      <pre>${r.compiledText.replace(/</g,'&lt;')}</pre>`;
+}
+
+// --- Staged Lesson player (the main gamified flow) --------------------------
+let flowState = { data: null, idx: 0 };
+function flowLessonId() { return document.getElementById('flowLessonId').value; }
+
+async function flowStart() {
+  flowState.idx = 0;
+  await loadFlow();
+}
+
+async function loadFlow() {
+  const status = document.getElementById('flowStatus');
+  status.textContent = 'loading…';
+  const data = await api('/lessons/' + flowLessonId() + '/flow');
+  if (data.error) { status.textContent = '✗ ' + data.error; return; }
+  flowState.data = data;
+  // Resume at the first not-done stage (or stay where the user navigated).
+  if (!flowState._userMoved) {
+    const firstUndone = data.stages.findIndex(s => !s.done);
+    flowState.idx = firstUndone === -1 ? data.stages.length - 1 : firstUndone;
+  }
+  status.textContent = '';
+  renderFlow();
+}
+
+function renderFlowBars() {
+  const d = flowState.data; if (!d) return '';
+  const g = d.gamification;
+  const bar = (pct, color) =>
+    `<div style="background:#e6e6e6;border-radius:6px;height:14px;overflow:hidden">
+       <div style="width:${pct}%;background:${color};height:100%;transition:width .3s"></div></div>`;
+  return `
+    <div style="display:flex;gap:1.2rem;flex-wrap:wrap;align-items:center;margin-bottom:.4rem">
+      <span>⭐ <b>${g.totalXp}</b> XP total</span>
+      <span>🔥 streak: <b>${g.todayStreak}</b></span>
+      <span>🎯 daily goal: <b>${g.dailyXp}/${g.dailyGoal}</b> XP ${g.dailyGoalMet ? '✅' : ''}</span>
+    </div>
+    <div style="font-size:.8rem;color:#577">Lesson progress — ${d.progress.stagesDone}/${d.progress.stagesTotal} stages (${d.progress.progressPct}%)</div>
+    ${bar(d.progress.progressPct, '#2b9e4b')}
+    <div style="font-size:.8rem;color:#577;margin-top:.4rem">Today's goal (${g.dailyGoalPct}%)</div>
+    ${bar(g.dailyGoalPct, '#e08a2b')}`;
+}
+
+function renderFlow() {
+  const d = flowState.data; if (!d) return;
+  document.getElementById('flowBars').innerHTML = renderFlowBars();
+  const stage = d.stages[flowState.idx];
+  const stageEl = document.getElementById('flowStage');
+  const dot = (s, i) => `<span title="${s.title}" onclick="flowGoto(${i})" style="cursor:pointer;display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:4px;background:${s.done ? '#2b9e4b' : (i===flowState.idx ? '#357' : '#ccc')}"></span>`;
+  const stepper = `<div style="margin-bottom:.6rem">${d.stages.map(dot).join('')}</div>`;
+
+  let body = `<div class="type">${stage.type} · stage ${flowState.idx+1}/${d.stages.length} · +${stage.xp} XP ${stage.done ? '✓ done' : ''}</div>
+              <h3 style="margin:.2rem 0">${stage.title}</h3>`;
+
+  if (stage.type === 'intro') {
+    body += `<p>${stage.body || ''}</p>
+      <button onclick="flowAdvance('${stage.key}')">Let's go →</button>`;
+  }
+  else if (stage.type === 'video') {
+    const p = stage.payload || {};
+    if (p.embedUrl) body += `🎬 <b>${p.title||''}</b> <span class="muted">${p.channel||''}</span><br>
+      <iframe width="100%" height="240" src="${p.embedUrl}" frameborder="0" allowfullscreen style="margin-top:.4rem;border-radius:8px"></iframe>`;
+    else if (p.url) body += `🎬 <a href="${p.url}" target="_blank">${p.title||p.query||'watch on YouTube'}</a>
+      ${p.resolved===false ? '<span class="muted"> (resource not resolved yet — add YOUTUBE_API_KEY + run resources)</span>' : ''}`;
+    else body += `<span class="muted">No video resource yet.</span>`;
+    body += `<br><button style="margin-top:.5rem" onclick="flowAdvance('${stage.key}')">✓ I watched it (+${stage.xp} XP) →</button>`;
+  }
+  else if (stage.type === 'reading') {
+    const p = stage.payload || {};
+    if (p.text) body += `📖 <b>${p.heading||p.topic||'Reading'}</b> <span class="muted">(${p.source||'reading'})</span>
+      <div style="margin-top:.4rem;max-height:220px;overflow:auto;background:#fff;border:1px solid #e3e3e3;border-radius:8px;padding:.5rem">${p.text}</div>
+      ${p.url?`<a href="${p.url}" target="_blank">read more →</a>`:''}`;
+    else body += `📖 <span class="muted">Reading not resolved yet${p.url?` — <a href="${p.url}" target="_blank">search</a>`:''}.</span>`;
+    body += `<br><button style="margin-top:.5rem" onclick="flowAdvance('${stage.key}')">✓ I read it (+${stage.xp} XP) →</button>`;
+  }
+  else if (stage.type === 'challenge') {
+    body += `<p>🎯 ${stage.prompt || ''}</p>`;
+    if (stage.hint) body += `<p class="muted">hint: ${stage.hint}</p>`;
+    body += `<textarea id="flowAns" placeholder="your answer…">${stage.savedAnswer||''}</textarea>
+      <div style="margin-top:.4rem"><button onclick="flowSubmitChallenge('${stage.key}')">Check answer</button>
+      ${stage.done ? `<button class="ghost" onclick="flowNext()">next →</button>` : ''}</div>
+      <div id="flowFeedback" style="margin-top:.5rem"></div>`;
+    if (stage.challengeKind === 'flashcard' && stage.answer) body += `<p class="muted">answer: ${stage.answer}</p>`;
+  }
+  else if (stage.type === 'draft') {
+    body += `<p>✍️ <b>${stage.prompt || ''}</b></p>`;
+    if (stage.rubricHint) body += `<p class="muted">rubric: ${stage.rubricHint}</p>`;
+    body += `<textarea id="flowAns" placeholder="write your real solution here (Coach gives feedback — never writes it for you)…" style="min-height:120px">${stage.savedAnswer||''}</textarea>
+      <div style="margin-top:.4rem"><button onclick="flowSubmitDraft('${stage.key}')">Submit draft for feedback</button>
+      ${stage.done ? `<button class="ghost" onclick="flowNext()">next →</button>` : ''}</div>
+      <div id="flowFeedback" style="margin-top:.5rem"></div>`;
+  }
+  else if (stage.type === 'complete') {
+    const g = d.gamification;
+    if (d.progress.lessonComplete) {
+      body += `<p style="font-size:1.2rem">🎉 Lesson complete! You earned XP across every stage.</p>
+        <p>⭐ Total XP: <b>${g.totalXp}</b> · 🔥 streak: <b>${g.todayStreak}</b> · 🎯 daily goal ${g.dailyXp}/${g.dailyGoal} ${g.dailyGoalMet?'— met! 🏅':''}</p>`;
+    } else {
+      const undone = d.progress.stagesTotal - d.progress.stagesDone;
+      body += `<p>Finish the lesson to lock in a <b>+${stage.xp} XP</b> bonus and bump your streak.</p>
+        ${undone>0?`<p class="muted">${undone} stage(s) still open — you can complete anyway, but doing them earns more XP.</p>`:''}
+        <button onclick="flowComplete()">🏁 Complete lesson (+${stage.xp} XP)</button>`;
+    }
+  }
+
+  stageEl.innerHTML = `<div class="block" style="border-left-color:#2b9e4b">${stepper}${body}</div>`;
+
+  // Prev/next nav
+  const nav = document.getElementById('flowNav');
+  nav.innerHTML =
+    `<button class="ghost" ${flowState.idx===0?'disabled':''} onclick="flowPrev()">← back</button>
+     <button class="ghost" ${flowState.idx>=d.stages.length-1?'disabled':''} onclick="flowNext()">skip →</button>`;
+}
+
+function flowGoto(i) { flowState._userMoved = true; flowState.idx = i; renderFlow(); }
+function flowPrev() { if (flowState.idx>0) flowGoto(flowState.idx-1); }
+function flowNext() { if (flowState.idx < flowState.data.stages.length-1) flowGoto(flowState.idx+1); }
+
+async function flowAdvance(stageKey) {
+  const r = await api('/lessons/' + flowLessonId() + '/flow/advance', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ stageKey })
+  });
+  if (r.error) { document.getElementById('flowStatus').textContent = '✗ ' + r.error; return; }
+  flowState._userMoved = false; // let loadFlow jump us forward
+  await loadFlow();
+  loadPlan();
+}
+
+async function flowSubmitChallenge(stageKey) {
+  const answer = document.getElementById('flowAns').value.trim();
+  const fb = document.getElementById('flowFeedback');
+  if (!answer) { fb.textContent = 'type an answer first'; return; }
+  fb.innerHTML = '<span class="muted">Coach is checking…</span>';
+  const r = await api('/lessons/' + flowLessonId() + '/flow/challenge', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ stageKey, answer })
+  });
+  if (r.error) {
+    fb.innerHTML = `<span style="color:#c33">✗ ${r.error}${r.code==='NO_API_KEY'?' (set GEMINI_API_KEY for Coach feedback — your answer + XP were still saved)':''}</span>`;
+    flowState._userMoved = true; await loadFlow(); return; // refresh progress/XP even on no-key
+  }
+  const verdict = r.correct === true ? '✅ Correct!' : (r.correct === false ? '🔁 Not quite — try again' : '💬 Coach says');
+  fb.innerHTML = `<div class="block" style="border-left-color:${r.correct===false?'#e0a':'#2b9e4b'}">
+      <b>${verdict}</b> ${r.xpAwarded?`<span class="muted">+${r.xpAwarded} XP</span>`:''}
+      <div style="margin-top:.3rem">${String(r.feedback||'').replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>
+      ${r.revealed?`<div class="muted" style="margin-top:.3rem">answer: ${r.revealed}</div>`:''}
+    </div>`;
+  flowState._userMoved = true; await loadFlow();
+}
+
+async function flowSubmitDraft(stageKey) {
+  const content = document.getElementById('flowAns').value.trim();
+  const fb = document.getElementById('flowFeedback');
+  if (!content) { fb.textContent = 'write your draft first'; return; }
+  fb.innerHTML = '<span class="muted">Coach is reading your draft…</span>';
+  const r = await api('/lessons/' + flowLessonId() + '/flow/draft', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ stageKey, content })
+  });
+  if (r.error) {
+    fb.innerHTML = `<span style="color:#c33">✗ ${r.error}${r.code==='NO_API_KEY'?' (set GEMINI_API_KEY for Coach feedback — your draft + XP were still saved)':''}</span>`;
+    flowState._userMoved = true; await loadFlow(); return;
+  }
+  fb.innerHTML = `<div class="block" style="border-left-color:#2b9e4b">
+      <b>🧑‍🏫 Coach</b> ${r.xpAwarded?`<span class="muted">+${r.xpAwarded} XP</span>`:''}
+      <div style="margin-top:.3rem">${String(r.feedback||'').replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div></div>`;
+  flowState._userMoved = true; await loadFlow();
+}
+
+async function flowComplete() {
+  const r = await api('/lessons/' + flowLessonId() + '/flow/complete', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}'
+  });
+  if (r.error) { document.getElementById('flowStatus').textContent = '✗ ' + r.error; return; }
+  flowState._userMoved = true; await loadFlow();
+  loadPlan();
 }
 
 // Compact inline preview of a block's generated content (so you can read what
