@@ -2,7 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 import { createHash } from 'node:crypto';
 import { db } from '../db/index.js';
 
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 
 let client = null;
 function getClient() {
