@@ -80,7 +80,7 @@ async function callWithFallback({ prompt, schema }) {
  * (SPEC §10 demo-safety): if the live call fails later, we can serve cache.
  */
 export async function generateJSON({ prompt, schema, cacheKeyExtra = '' }) {
-  const request_hash = hashRequest({ model: MODEL, prompt, schema, cacheKeyExtra });
+  const request_hash = hashRequest({ model: PRIMARY_MODEL, prompt, schema, cacheKeyExtra });
 
   // Cache hit?
   const cached = db
