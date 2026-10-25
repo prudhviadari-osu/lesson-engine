@@ -1,0 +1,9 @@
+# Learn++ runtime requires NO third-party packages — it runs on the Python
+# standard library (http.server + sqlite3). This file lists only the OPTIONAL
+# extras used in production on the Ubuntu VM.
+
+# MySQL driver (see docs/MIGRATION.md): DATABASE_URL=mysql+pymysql://...
+pymysql>=1.1
+
+# Canvas scraping on the VM (also run: playwright install chromium)
+playwright>=1.44

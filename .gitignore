@@ -1,7 +1,19 @@
-node_modules/
-uploads/
-learning.db
-learning.db-shm
-learning.db-wal
+# Python
+__pycache__/
+*.pyc
+
+# Local SQLite database (created by seed / run)
+*.db
+*.db-shm
+*.db-wal
+backend/learnpp.db
+
+# Logs
 *.log
+
+# Secrets / local env
 .env
+backend/.env
+
+# Uploaded files
+uploads/

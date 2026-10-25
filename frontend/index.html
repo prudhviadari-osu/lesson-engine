@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>learning++</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+  <!-- ===================== AUTH SCREEN ===================== -->
+  <div id="auth-screen" class="auth-screen">
+    <div class="auth-card">
+      <div class="brand"><span class="brand-mark">learning<span class="plus">++</span></span></div>
+      <p class="brand-tag">Learn the assignment, don't just finish it.</p>
+
+      <!-- Role picker -->
+      <div id="role-picker">
+        <p class="auth-hint">Sign in as</p>
+        <div class="role-grid">
+          <button class="role-btn" data-role="student">🎓 Student</button>
+          <button class="role-btn" data-role="professor">📘 Professor</button>
+          <button class="role-btn" data-role="admin">🛡️ Admin</button>
+          <button class="role-btn" data-role="recruiter">💼 Recruiter</button>
+        </div>
+      </div>
+
+      <!-- Login -->
+      <form id="login-form" class="hidden">
+        <p class="auth-hint">Logging in as <strong id="login-role-label"></strong></p>
+        <input class="input" id="login-email" type="email" placeholder="Email" required />
+        <input class="input" id="login-password" type="password" placeholder="Password" required />
+        <div class="auth-err" id="login-error"></div>
+        <button class="btn" type="submit">Continue</button>
+        <div class="auth-links">
+          <a href="#" id="back-to-roles">← Back</a>
+          <a href="#" id="to-signup">Create account</a>
+        </div>
+      </form>
+
+      <!-- 2FA -->
+      <form id="twofa-form" class="hidden">
+        <p class="auth-hint" id="twofa-msg">Enter your OSU verification code.</p>
+        <input class="input" id="twofa-code" placeholder="6-digit code" required />
+        <div class="auth-err" id="twofa-error"></div>
+        <button class="btn" type="submit">Verify</button>
+      </form>
+
+      <!-- Signup -->
+      <form id="signup-form" class="hidden">
+        <p class="auth-hint">Create your account</p>
+        <select class="input" id="signup-role">
+          <option value="student">Student</option>
+          <option value="professor">Professor</option>
+          <option value="admin">Admin</option>
+          <option value="recruiter">Recruiter</option>
+        </select>
+        <input class="input" id="signup-fullname" placeholder="Full name" required />
+        <input class="input" id="signup-username" placeholder="Username" required />
+        <input class="input" id="signup-email" type="email" placeholder="Email" required />
+        <input class="input" id="signup-password" type="password" placeholder="Password (min 6)" required />
+        <input class="input" id="signup-osu" placeholder="OSU name.# (e.g. buckeye.1)" />
+        <input class="input hidden" id="signup-company" placeholder="Company" />
+        <div class="auth-err" id="signup-error"></div>
+        <button class="btn" type="submit">Sign up</button>
+        <div class="auth-links"><a href="#" id="back-to-login">← Back to login</a></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===================== APP SHELL ===================== -->
+  <div id="app-shell" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="side-brand">
+        <span class="brand-mark">learning<span class="plus">++</span></span>
+        <button id="sidebar-toggle" class="icon-btn" title="Collapse">≡</button>
+      </div>
+      <div class="side-user">
+        <div class="avatar" id="side-avatar">?</div>
+        <div>
+          <div id="side-name" class="side-name"></div>
+          <div id="side-role" class="side-role"></div>
+        </div>
+      </div>
+      <nav id="nav" class="nav"></nav>
+      <button id="logout-btn" class="btn ghost logout">Log out</button>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button id="mobile-menu" class="icon-btn mobile-only">☰</button>
+        <h2 id="page-title">Home</h2>
+      </header>
+      <section id="view" class="view"></section>
+    </main>
+
+    <nav id="bottombar" class="bottombar"></nav>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/views.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
