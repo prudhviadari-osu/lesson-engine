@@ -131,3 +131,72 @@ def mock_draft_feedback() -> str:
         "head-on. One concrete improvement to try yourself: make your opening sentence state your "
         "main point more directly. I won't rewrite it — that's your voice. Give it a tweak!"
     )
+
+
+# ------------------------------- portfolio ---------------------------------
+def mock_portfolio_skills(work: list[dict]) -> dict:
+    """Deterministic resume-worthy skills grounded in the student's completed work.
+
+    Mirrors the JS skillsSchema: {skills:[{skill, evidence}]}. Each skill is tied
+    to a concrete piece of work the student actually finished (honesty-by-design),
+    so offline output still looks real and is stable for a given set of work.
+    """
+    skills: list[dict] = []
+    seen: set[str] = set()
+
+    def add(skill: str, evidence: str) -> None:
+        key = skill.lower()
+        if skill and key not in seen:
+            seen.add(key)
+            skills.append({"skill": skill, "evidence": evidence})
+
+    for a in work:
+        title = a.get("title") or "an assignment"
+        course = a.get("course_code") or a.get("course_title") or "coursework"
+        label = f'"{title}" ({course})'
+        # Derive a couple of grounded skills per completed assignment.
+        add(f"Applied {title}", f"Completed {label}")
+        add("Technical problem solving", f"Worked through {label} step by step")
+
+    # A few durable, cross-cutting skills any completed-work student can claim.
+    if work:
+        add("Self-directed learning", "Finished lessons independently in learning++")
+        add("Written communication", "Drafted deliverables in their own words")
+        add("Time management", "Completed coursework through staged daily lessons")
+    return {"skills": skills}
+
+
+def mock_portfolio_projects(skills: list[str], count: int) -> dict:
+    """Deterministic portfolio-project recommendations built on the student's skills.
+
+    Mirrors the JS projectsSchema: {projects:[{name, difficulty, description,
+    skillsReinforced, newSkills, time}]}. Stable for a given skill set + count.
+    """
+    base = skills[:3] if skills else ["your coursework skills"]
+    difficulties = ["Beginner", "Intermediate", "Advanced"]
+    times = ["1 week", "2 weeks", "3 weeks", "1 month", "1 month"]
+    templates = [
+        ("Interactive CLI toolkit", "A command-line tool that automates a repetitive task, with tests and a README."),
+        ("Full-stack study tracker", "A small web app that stores and visualizes your study progress over time."),
+        ("Data-analysis mini project", "Load a public dataset, clean it, and surface three insights with charts."),
+        ("REST API with auth", "A small service exposing CRUD endpoints behind token-based authentication."),
+        ("Algorithms playground", "Implement and benchmark a few classic algorithms with clear write-ups."),
+        ("Portfolio website", "A personal site that showcases your completed projects and skills."),
+    ]
+    new_skill_pool = ["Testing", "Git workflow", "API design", "Data visualization",
+                      "Deployment", "Documentation"]
+
+    n = max(1, min(count, len(templates)))
+    projects = []
+    for i in range(n):
+        name, desc = templates[i]
+        projects.append({
+            "name": name,
+            "difficulty": difficulties[i % len(difficulties)],
+            "description": desc,
+            "skillsReinforced": base,
+            "newSkills": [new_skill_pool[i % len(new_skill_pool)],
+                          new_skill_pool[(i + 1) % len(new_skill_pool)]],
+            "time": times[i % len(times)],
+        })
+    return {"projects": projects}

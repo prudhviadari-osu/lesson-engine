@@ -578,8 +578,190 @@ const Views = (() => {
       </div></div>`;
   }
 
+  // ---------------- PORTFOLIO (student-only) ----------------
+  // Two halves: the GUIDE (AI-recommended projects built from the skills the
+  // student has gained, each with "Get Help" that spins up a real gamified
+  // lesson flow, plus "Save") and the PERSONAL portfolio (resume-style view of
+  // skills + completed work + saved projects + stats, with a "refresh skills").
+  // This is DISTINCT from the recruiter-facing project showcase.
+  async function portfolio(root, navigate) {
+    let pf = null;      // personal portfolio snapshot
+    let guide = null;   // { projects, skills, note }
+
+    async function loadPersonal() { pf = await API.portfolio(); }
+
+    function statsBar(s) {
+      if (!s) return "";
+      return `<div class="xp-bar-wrap">
+        <span class="xp-badge">⭐ ${s.totalXp} XP</span>
+        <span class="streak-badge">🔥 ${s.todayStreak} today</span>
+        <span class="muted" style="font-size:.8rem">Daily goal ${s.dailyXp}/${s.dailyGoal}</span>
+        <div class="goal-track"><div class="goal-fill" style="width:${s.dailyGoalPct}%"></div></div>
+        ${s.dailyGoalMet ? `<span class="pill ok">goal met 🎉</span>` : ""}
+      </div>`;
+    }
+
+    function skillsList(skills) {
+      if (!skills || !skills.length) {
+        return `<div class="empty">No skills yet. Finish a lesson, then hit "Refresh skills" to build your resume from the work you actually completed.</div>`;
+      }
+      return `<div class="row" style="flex-wrap:wrap;gap:8px">` +
+        skills.map((s) => `<span class="pill ok" title="${esc(s.evidence || s.source || "")}">${esc(s.skill)}</span>`).join("") +
+        `</div>`;
+    }
+
+    function completedList(work) {
+      if (!work || !work.length) return `<div class="empty">No completed coursework yet.</div>`;
+      return `<div class="stack">` + work.map((a) => `<div class="card" style="margin:0">
+        <strong>${esc(a.title)}</strong>
+        <div class="muted-row">${esc(a.course || "")}${a.completedLessons && a.completedLessons.length ? " · " + a.completedLessons.map(esc).join(", ") : ""}</div>
+      </div>`).join("") + `</div>`;
+    }
+
+    function savedList(projects) {
+      if (!projects || !projects.length) return `<div class="empty">No saved projects yet. Save one from the Guide above.</div>`;
+      return `<div class="stack">` + projects.map((p) => `<div class="card" style="margin:0">
+        <div class="row" style="justify-content:space-between">
+          <div><strong>${esc(p.name)}</strong>
+            <div class="muted-row">${esc(p.difficulty || "")} · ${esc(p.status)}</div></div>
+          <div class="row">
+            ${p.assignmentId
+              ? `<button class="btn sm" data-pf-open-asg="${p.assignmentId}">Open lessons</button>`
+              : `<button class="btn sm" data-pf-help-saved="${p.id}">Get Help</button>`}
+          </div>
+        </div>
+      </div>`).join("") + `</div>`;
+    }
+
+    function projectCard(p, idx) {
+      const reinforced = (p.skillsReinforced || []).map(esc).join(", ");
+      const fresh = (p.newSkills || []).map(esc).join(", ");
+      return `<div class="card" style="margin:0" data-guide-idx="${idx}">
+        <div class="row" style="justify-content:space-between">
+          <h3 style="margin:0">${esc(p.name)}</h3>
+          <span class="pill">${esc(p.difficulty || "")}${p.time ? " · " + esc(p.time) : ""}</span>
+        </div>
+        <p>${esc(p.description || "")}</p>
+        ${reinforced ? `<div class="muted-row">🔁 Reinforces: ${reinforced}</div>` : ""}
+        ${fresh ? `<div class="muted-row">✨ You'll learn: ${fresh}</div>` : ""}
+        <div class="row" style="margin-top:10px">
+          <button class="btn sm" data-pf-help="${idx}">Get Help (build it as lessons)</button>
+          <button class="btn sm ghost" data-pf-save="${idx}">Save</button>
+        </div>
+      </div>`;
+    }
+
+    function render() {
+      const s = pf && pf.stats;
+      let html = `<div class="card"><div class="row" style="justify-content:space-between">
+        <div><h3 style="margin:0">Your Portfolio</h3>
+          <p class="muted">An AI-built, honesty-by-design portfolio: skills come ONLY from coursework you actually completed. Then get recommended projects that build on them.</p></div>
+      </div>${statsBar(s)}</div>`;
+
+      // --- Guide ---
+      html += `<div class="section-title"><h3 style="margin:0">Portfolio Guide</h3>
+        <span class="pill">recommended projects</span></div>`;
+      html += `<div class="card"><div class="row" style="justify-content:space-between">
+        <p class="muted" style="margin:0">Projects that build on your current skills. Each one can become a real, playable gamified lesson flow.</p>
+        <button class="btn sm" data-pf-guide>${guide ? "Refresh guide" : "Load recommended projects"}</button>
+      </div></div>`;
+      if (guide) {
+        if (guide.note) html += `<div class="empty">${esc(guide.note)}</div>`;
+        if (guide.projects && guide.projects.length) {
+          html += `<div class="stack">` + guide.projects.map((p, i) => projectCard(p, i)).join("") + `</div>`;
+        } else if (!guide.note) {
+          html += `<div class="empty">No recommendations yet.</div>`;
+        }
+      }
+
+      // --- Personal portfolio ---
+      html += `<div class="section-title"><h3 style="margin:0">Personal Portfolio</h3>
+        <button class="btn sm ghost" data-pf-refresh>Refresh skills</button></div>`;
+      html += `<div class="card"><h3>Skills</h3>
+        <p class="muted">Credited only from work you actually finished.</p>
+        ${skillsList(pf && pf.skills)}</div>`;
+      html += `<div class="card"><h3>Completed work</h3>${completedList(pf && pf.completedWork)}</div>`;
+      html += `<div class="card"><h3>Courses completed</h3>${
+        (pf && pf.coursesCompleted && pf.coursesCompleted.length)
+          ? `<ul>${pf.coursesCompleted.map((c) => `<li>${esc(c)}</li>`).join("")}</ul>`
+          : `<div class="empty">None yet.</div>`}</div>`;
+      html += `<div class="card"><h3>Saved projects</h3>${savedList(pf && pf.projects)}</div>`;
+
+      root.innerHTML = html;
+      wire();
+    }
+
+    async function getHelp(project) {
+      window.toast("Building your lessons…");
+      const r = await API.portfolioProjectHelp(project);
+      await loadPersonal();
+      if (r.lessons && r.lessons.length && r.courseId) {
+        // Jump straight into the playable staged-flow lesson player.
+        return navigate("lessonFlow", {
+          courseId: r.courseId, assignmentId: r.assignmentId, lessonId: r.lessons[0].id,
+        });
+      }
+      window.toast("Lessons ready — see 'Saved projects'.");
+      render();
+    }
+
+    function wire() {
+      const guideBtn = root.querySelector("[data-pf-guide]");
+      if (guideBtn) guideBtn.onclick = async () => {
+        guideBtn.disabled = true;
+        try { guide = await API.portfolioGuide(5); render(); }
+        catch (e) { window.toast(e.message, true); guideBtn.disabled = false; }
+      };
+
+      const refreshBtn = root.querySelector("[data-pf-refresh]");
+      if (refreshBtn) refreshBtn.onclick = async () => {
+        refreshBtn.disabled = true;
+        try { const r = await API.portfolioSkillsRefresh(); await loadPersonal(); window.toast(`Skills refreshed (${r.extracted} found)`); render(); }
+        catch (e) { window.toast(e.message, true); refreshBtn.disabled = false; }
+      };
+
+      root.querySelectorAll("[data-pf-save]").forEach((b) => b.onclick = async () => {
+        const p = guide.projects[Number(b.dataset.pfSave)];
+        b.disabled = true;
+        try { await API.portfolioSaveProject(p); await loadPersonal(); window.toast("Project saved"); render(); }
+        catch (e) { window.toast(e.message, true); b.disabled = false; }
+      });
+
+      root.querySelectorAll("[data-pf-help]").forEach((b) => b.onclick = async () => {
+        const p = guide.projects[Number(b.dataset.pfHelp)];
+        b.disabled = true;
+        try { await getHelp(p); } catch (e) { window.toast(e.message, true); b.disabled = false; }
+      });
+
+      root.querySelectorAll("[data-pf-help-saved]").forEach((b) => b.onclick = async () => {
+        const saved = (pf.projects || []).find((x) => String(x.id) === b.dataset.pfHelpSaved);
+        if (!saved) return;
+        b.disabled = true;
+        try { await getHelp({ id: saved.id, ...(saved.spec || {}), name: saved.name }); }
+        catch (e) { window.toast(e.message, true); b.disabled = false; }
+      });
+
+      root.querySelectorAll("[data-pf-open-asg]").forEach((b) => b.onclick = async () => {
+        // Open the self-assigned project's lessons via the normal lesson picker.
+        const aid = b.dataset.pfOpenAsg;
+        const saved = (pf.projects || []).find((x) => String(x.assignmentId) === String(aid));
+        try {
+          const r = await API.portfolioProjectHelp({ id: saved ? saved.id : undefined, name: saved ? saved.name : "" });
+          if (r.courseId && r.lessons && r.lessons.length) {
+            return navigate("lessonFlow", { courseId: r.courseId, assignmentId: r.assignmentId, lessonId: r.lessons[0].id });
+          }
+        } catch (e) { window.toast(e.message, true); }
+      });
+    }
+
+    root.innerHTML = `<div class="muted">Loading your portfolio…</div>`;
+    await loadPersonal();
+    render();
+  }
+
   return {
     esc, home, courses, courseAssignments, lessonPicker, lessonFlow, compile,
     plan, preferences, forum, projects, announcements, advisor, admin, profile,
+    portfolio,
   };
 })();

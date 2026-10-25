@@ -525,6 +525,133 @@ def cache_set(provider: str, request_hash: str, data: Any) -> None:
     )
 
 
+# ------------------------------ portfolio ----------------------------------
+# Honesty-by-design reads: a student's COMPLETED work is any assignment with at
+# least one 'done' lesson, scoped to the courses they're enrolled in. Mirrors
+# the 'done'-lesson basis compile uses — nothing is credited that the student
+# didn't actually finish.
+def list_completed_work_for_user(user_id: int) -> list[dict]:
+    return db.rows_to_dicts(db.query_all(
+        "SELECT DISTINCT a.id, a.title, a.description, a.due_at, c.code AS course_code, "
+        "c.title AS course_title "
+        "FROM assignments a JOIN courses c ON c.id = a.course_id "
+        "JOIN enrollments e ON e.course_id = c.id AND e.user_id = ? "
+        "JOIN lessons l ON l.assignment_id = a.id "
+        "WHERE l.status = 'done' ORDER BY a.id",
+        (user_id,),
+    ))
+
+
+def list_completed_lesson_titles(assignment_id: int) -> list[str]:
+    rows = db.query_all(
+        "SELECT title FROM lessons WHERE assignment_id = ? AND status = 'done' ORDER BY seq",
+        (assignment_id,),
+    )
+    return [r["title"] for r in rows]
+
+
+def list_completed_courses_for_user(user_id: int) -> list[str]:
+    rows = db.query_all(
+        "SELECT DISTINCT c.code, c.title FROM courses c "
+        "JOIN enrollments e ON e.course_id = c.id AND e.user_id = ? "
+        "JOIN assignments a ON a.course_id = c.id "
+        "JOIN lessons l ON l.assignment_id = a.id "
+        "WHERE l.status = 'done' ORDER BY c.code",
+        (user_id,),
+    )
+    return [f"{r['code']} — {r['title']}" for r in rows]
+
+
+# --- user_skill (persisted, accumulating) ---
+def list_user_skills(user_id: int) -> list[dict]:
+    return db.rows_to_dicts(db.query_all(
+        "SELECT skill, source, evidence, created_at FROM user_skill "
+        "WHERE user_id = ? ORDER BY id DESC",
+        (user_id,),
+    ))
+
+
+def upsert_user_skill(user_id: int, skill: str, source: str, evidence: str) -> None:
+    db.execute(
+        "INSERT INTO user_skill (user_id, skill, source, evidence) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT(user_id, skill) DO UPDATE SET "
+        "evidence = CASE WHEN excluded.evidence <> '' THEN excluded.evidence "
+        "ELSE user_skill.evidence END",
+        (user_id, skill, source, evidence),
+    )
+
+
+# --- portfolio_project (accepted projects) ---
+def create_portfolio_project(user_id: int, name: str, difficulty: str | None,
+                             spec_json: str, status: str = "recommended") -> int:
+    return db.execute(
+        "INSERT INTO portfolio_project (user_id, name, difficulty, spec_json, status) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (user_id, name, difficulty, spec_json, status),
+    )
+
+
+def get_portfolio_project(project_id: int, user_id: int) -> dict | None:
+    return db.row_to_dict(db.query_one(
+        "SELECT * FROM portfolio_project WHERE id = ? AND user_id = ?",
+        (project_id, user_id),
+    ))
+
+
+def get_portfolio_project_by_name(user_id: int, name: str) -> dict | None:
+    return db.row_to_dict(db.query_one(
+        "SELECT * FROM portfolio_project WHERE user_id = ? AND name = ? "
+        "ORDER BY id DESC LIMIT 1",
+        (user_id, name),
+    ))
+
+
+def list_portfolio_projects(user_id: int) -> list[dict]:
+    return db.rows_to_dicts(db.query_all(
+        "SELECT id, name, difficulty, spec_json, status, assignment_id, created_at "
+        "FROM portfolio_project WHERE user_id = ? ORDER BY id DESC",
+        (user_id,),
+    ))
+
+
+def link_portfolio_project_assignment(project_id: int, assignment_id: int) -> None:
+    db.execute(
+        "UPDATE portfolio_project SET assignment_id = ?, status = 'in_progress', "
+        "updated_at = datetime('now') WHERE id = ?",
+        (assignment_id, project_id),
+    )
+
+
+def set_portfolio_project_status(user_id: int, project_id: int, status: str) -> int:
+    conn = db.connect()
+    cur = conn.execute(
+        "UPDATE portfolio_project SET status = ?, updated_at = datetime('now') "
+        "WHERE id = ? AND user_id = ?",
+        (status, project_id, user_id),
+    )
+    conn.commit()
+    return cur.rowcount
+
+
+# --- self-assigned "Portfolio projects" course helpers ---
+# The staged flow is reached through the normal course-scoped endpoints, which
+# require the acting student to be enrolled. So each student gets a private
+# "Portfolio projects" course they are enrolled in, and project assignments live
+# under it. Section is namespaced per-user to keep it private + unique.
+def get_portfolio_course_for_user(user_id: int) -> dict | None:
+    return db.row_to_dict(db.query_one(
+        "SELECT * FROM courses WHERE code = 'PORTFOLIO' AND section = ?",
+        (f"u{user_id}",),
+    ))
+
+
+def list_assignment_lessons_brief(assignment_id: int) -> list[dict]:
+    return db.rows_to_dicts(db.query_all(
+        "SELECT id, seq, title, status FROM lessons WHERE assignment_id = ? ORDER BY seq",
+        (assignment_id,),
+    ))
+
+
 # ------------------------------- forums ------------------------------------
 def create_thread(course_id: int, author_id: int, title: str, body: str) -> int:
     return db.execute(

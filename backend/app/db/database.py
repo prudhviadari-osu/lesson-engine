@@ -199,6 +199,52 @@ CREATE TABLE IF NOT EXISTS resource_cache (
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- =====================================================================
+-- Portfolio (the product's point of uniqueness). ADDITIVE tables.
+-- Two halves: a "Guide" of AI-recommended projects built from the skills a
+-- student has gained, and a resume-friendly "Personal Portfolio". Skills
+-- accumulate from COMPLETED coursework (the SAME 'done'-lesson basis compile
+-- uses — honesty-by-design). References the unified app's `users`/`assignments`.
+-- =====================================================================
+
+-- The student's accumulating skill list. Derived from their completed
+-- coursework by Gemini (or the offline mock), then persisted so it grows over
+-- time. UNIQUE(user_id, skill) keeps it a set — re-running extraction is
+-- idempotent. `source` records provenance ('coursework' | 'project' | 'manual')
+-- and `evidence` is an optional short free-text justification for the resume.
+CREATE TABLE IF NOT EXISTS user_skill (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    skill TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT 'coursework',  -- coursework | project | manual
+    evidence TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(user_id, skill)
+);
+
+-- A recommended project the student chose to keep/work on. The Guide's
+-- recommendations are generated on demand (+ cached in resource_cache); only
+-- accepted projects are persisted here. `spec_json` holds the full generated
+-- project object as JSON. `status` tracks progress ('recommended' |
+-- 'in_progress' | 'done'). `assignment_id` links a project to the self-assigned
+-- `assignment` created when the student asks for help: that assignment is
+-- decomposed into the SAME gamified staged lesson flow as any other, so
+-- "Get Help" is a real, playable lesson journey. NULL until help is requested.
+CREATE TABLE IF NOT EXISTS portfolio_project (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    difficulty TEXT,
+    spec_json TEXT NOT NULL DEFAULT '{}',
+    status TEXT NOT NULL DEFAULT 'recommended',  -- recommended | in_progress | done
+    assignment_id INTEGER REFERENCES assignments(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_skill_user ON user_skill(user_id);
+CREATE INDEX IF NOT EXISTS idx_portfolio_project_user ON portfolio_project(user_id, status, id);
+
 CREATE INDEX IF NOT EXISTS idx_lessons_assignment ON lessons(assignment_id);
 CREATE INDEX IF NOT EXISTS idx_blocks_lesson ON lesson_blocks(lesson_id);
 CREATE INDEX IF NOT EXISTS idx_answers_assignment ON lesson_answers(assignment_id);

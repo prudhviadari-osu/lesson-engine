@@ -7,7 +7,13 @@ import re
 from ..core.security import create_access_token, hash_password, verify_password
 from ..db import repository as repo
 from ..integrations import OSUAuth, OSUClassSearch
-from ..services import compile_service, flow_service, planner_service, tutor_service
+from ..services import (
+    compile_service,
+    flow_service,
+    planner_service,
+    portfolio_service,
+    tutor_service,
+)
 from ..services.decompose_service import decompose_assignment
 from ..services.lesson_service import (
     autogenerate_due_soon,
@@ -336,6 +342,69 @@ def compile_consent(req: Request):
     if b.get("reviewed") is not True or b.get("consented") is not True:
         raise HttpError(400, "both reviewed:true and consented:true are required to mark ready")
     return compile_service.record_consent(aid, user["id"], True, True, b.get("contentHash"))
+
+
+# ---- portfolio (the product's point of uniqueness, STUDENT-only) ----
+# Two halves: the "Guide" (AI-recommended projects built from the skills the
+# student has gained, each with a "Get Help" that materializes a real gamified
+# lesson flow) and the "Personal Portfolio" (a resume-friendly view of their
+# completed work + skills + saved projects + stats). Skills accumulate; project
+# recommendations are generated on demand (+ cached). Reads lean on the SAME
+# completed-work basis as compile — nothing is credited that the student didn't
+# actually finish. Auth: a logged-in STUDENT acting ONLY on their OWN id (never
+# a client-supplied id). The framework has no PATCH verb, so status updates use
+# PUT (mirroring /api/users/me).
+def _portfolio_student(req: Request) -> dict:
+    return req.require_roles("student")
+
+
+@router.get("/api/portfolio")
+def portfolio_home(req: Request):
+    user = _portfolio_student(req)
+    return portfolio_service.get_personal_portfolio(user["id"])
+
+
+@router.get("/api/portfolio/skills")
+def portfolio_skills(req: Request):
+    user = _portfolio_student(req)
+    return {"skills": portfolio_service.get_skills(user["id"])}
+
+
+@router.post("/api/portfolio/skills/refresh")
+def portfolio_skills_refresh(req: Request):
+    user = _portfolio_student(req)
+    return portfolio_service.extract_skills(user["id"])
+
+
+@router.get("/api/portfolio/guide")
+def portfolio_guide(req: Request):
+    user = _portfolio_student(req)
+    try:
+        count = int(req.query.get("count", 5))
+    except (TypeError, ValueError):
+        count = 5
+    count = max(1, min(count, 10))
+    return portfolio_service.recommend_projects(user["id"], count)
+
+
+@router.post("/api/portfolio/projects/help")
+def portfolio_project_help(req: Request):
+    user = _portfolio_student(req)
+    return portfolio_service.get_project_help(user["id"], (req.body or {}).get("project"))
+
+
+@router.post("/api/portfolio/projects")
+def portfolio_project_save(req: Request):
+    user = _portfolio_student(req)
+    result = portfolio_service.save_project(user["id"], (req.body or {}).get("project"))
+    return {"status": 201, **result}
+
+
+@router.put("/api/portfolio/projects/{project_id}")
+def portfolio_project_status(req: Request):
+    user = _portfolio_student(req)
+    pid = int(req.params["project_id"])
+    return portfolio_service.set_project_status(user["id"], pid, (req.body or {}).get("status"))
 
 
 # ---- learning-style preferences ----

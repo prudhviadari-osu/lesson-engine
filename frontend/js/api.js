@@ -71,5 +71,13 @@ const API = (() => {
     planUnschedule: (lessonId) => req("POST", `/plan/lessons/${lessonId}/unschedule`),
     planReschedule: (lessonId) => req("POST", `/plan/lessons/${lessonId}/reschedule`),
     planClear: () => req("POST", "/plan/clear"),
+
+    // --- portfolio (student-only: AI-built portfolio + project recommendations) ---
+    portfolio: () => req("GET", "/portfolio"),
+    portfolioSkillsRefresh: () => req("POST", "/portfolio/skills/refresh"),
+    portfolioGuide: (count) => req("GET", `/portfolio/guide${count ? `?count=${count}` : ""}`),
+    portfolioSaveProject: (project) => req("POST", "/portfolio/projects", { project }),
+    portfolioProjectHelp: (project) => req("POST", "/portfolio/projects/help", { project }),
+    portfolioSetStatus: (projectId, status) => req("PUT", `/portfolio/projects/${projectId}`, { status }),
   };
 })();

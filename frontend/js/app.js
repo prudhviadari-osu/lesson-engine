@@ -7,8 +7,9 @@
   const NAV = {
     student: [
       ["home", "🏠", "Home"], ["courses", "📚", "Courses"], ["plan", "🗓️", "Plan"],
-      ["projects", "💡", "Projects"], ["announcements", "📣", "Announcements"],
-      ["advisor", "🧭", "Advisor"], ["preferences", "🎛️", "Learning"], ["profile", "👤", "Profile"],
+      ["portfolio", "🎓", "Portfolio"], ["projects", "💡", "Projects"],
+      ["announcements", "📣", "Announcements"], ["advisor", "🧭", "Advisor"],
+      ["preferences", "🎛️", "Learning"], ["profile", "👤", "Profile"],
     ],
     professor: [
       ["home", "🏠", "Home"], ["courses", "📚", "Courses"], ["projects", "💡", "Projects"],
@@ -26,7 +27,7 @@
     home: "Home", courses: "Courses", plan: "Study Plan", lessonPicker: "Lessons",
     lessonFlow: "Lesson", compile: "Compile & Submit", preferences: "Learning Style",
     projects: "Projects", announcements: "Announcements", advisor: "Schedule Advisor",
-    admin: "Recruiter Registry", profile: "Profile",
+    admin: "Recruiter Registry", profile: "Profile", portfolio: "Portfolio",
   };
 
   function toast(msg, isErr) {
@@ -143,6 +144,11 @@
       }
       if (key === "compile") {
         await Views.compile(view, extra.courseId, extra.assignmentId);
+        document.querySelector(".app-shell").classList.remove("mobile-open");
+        return;
+      }
+      if (key === "portfolio") {
+        await Views.portfolio(view, navigate);
         document.querySelector(".app-shell").classList.remove("mobile-open");
         return;
       }
