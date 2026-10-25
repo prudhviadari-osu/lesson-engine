@@ -1,5 +1,3 @@
-# learning-
-
 Repository for the **HACK OH/IO** project — **Learn++**.
 
 ---
@@ -14,9 +12,9 @@ lesson experience** — an AI "Coach" tutor plus a staged flow that teaches the
 concept, then guides you to produce the real deliverable **in your own words**
 (the opposite of copy-pasting an AI answer). It also hosts **course-scoped
 forums**, a **project showcase** that approved recruiters can browse,
-**announcements**, a **schedule advisor**, **customizable profiles**, and a
-**study planner** — all under role-based access control for Students,
-Professors, Administration, and Verified Recruiters.
+**announcements**, a **schedule advisor**, **customizable profiles**, a
+**study planner**, and a **Portfolio** builder — all under role-based access
+control for Students, Professors, Administration, and Verified Recruiters.
 
 This is **one unified Python app** (standard-library only, runs fully offline).
 It merges a teammate's Learn++ platform (auth/roles/forums/recruiters/
@@ -40,6 +38,14 @@ a review+consent gate → learning-style preferences).
    review+consent tied to a content hash (editing an answer makes it stale).
 5. **Planner** — schedules lessons backward from each due date with a daily cap
    and submission buffer; unschedule → backlog.
+6. **Portfolio** (the point of uniqueness) — from the work you've actually
+   completed, AI extracts resume-worthy **skills** (accumulating over time) and
+   recommends **portfolio projects** that build on them. "Get Help" on a project
+   materializes it as a self-assigned assignment run through the *same* gamified
+   lesson flow — so a recommendation becomes a real, playable lesson, not a
+   static plan. A resume-friendly **Personal Portfolio** view shows your skills,
+   completed work, saved projects, and stats. Skills are only credited from work
+   you genuinely finished (same honesty basis as compile).
 
 **Mock vs real:** with **no `GEMINI_API_KEY`** (or `USE_MOCK_INTEGRATIONS=1`)
 every AI path — decompose, Coach tutor, and per-stage feedback — uses
@@ -96,6 +102,7 @@ Students & professors complete OSU two-factor with the code **`000000`**.
 | Compile + review/consent gate (content-hash) | `services/compile_service.py`, `frontend/js/views.js` (compile) |
 | Study planner + reflow (backward from due date, daily cap, backlog) | `services/planner_service.py` |
 | Learning-style preferences (max 2 + notes) | `services/preferences_service.py` |
+| **Portfolio**: AI skills from completed work → recommended projects → "Get Help" lessons → resume view | `services/portfolio_service.py`, `frontend/js/views.js` (portfolio) |
 | AI over urllib (decompose JSON + Coach chat) with offline mocks | `integrations/gemini_service.py`, `services/ai_mock.py` |
 | Projects: guided (course-scoped) + showcase (recruiter-visible) + comments | `web/routes.py` (projects) |
 | Announcements (events / study / exams / resources) | `web/routes.py` (announcements) |
@@ -121,8 +128,9 @@ python backend/scripts/smoke_test.py
 It exercises the full app — role login, course-scoped access, recruiter
 restrictions, the interactive lesson engine (decompose, gamified flow with XP,
 Coach tutor, challenge/draft, compile + consent gate, learning preferences,
-planner/backlog), forums, moderation, projects, profiles, admin registry — and
-prints a pass/fail summary (47 checks).
+planner/backlog), the Portfolio (skills, project guide, "Get Help"), forums,
+moderation, projects, profiles, admin registry — and prints a pass/fail summary
+(59 checks).
 
 ---
 
@@ -157,8 +165,8 @@ backend/
     db/            SQLite data-access layer + repository (swappable to MySQL)
     integrations/  Gemini (urllib JSON + chat), Canvas (Playwright), OSU auth/search
     services/      lesson engine: decompose, resolve, tutor, flow, compile,
-                   planner, preferences, lesson_service (Canvas autogen),
-                   ai_mock (offline AI), onboarding
+                   planner, preferences, portfolio, lesson_service (Canvas
+                   autogen), ai_mock (offline AI), onboarding
     web/           tiny HTTP router, access control, routes
     main.py        server entrypoint (API + static UI, one origin)
   scripts/         seed.py, smoke_test.py
