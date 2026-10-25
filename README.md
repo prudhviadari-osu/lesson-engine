@@ -61,6 +61,10 @@ lost.
 No third-party packages are required — the backend runs on the Python standard
 library, and the database is SQLite out of the box.
 
+> **Run these from the repository root** — the folder that *contains* `backend/`
+> (not from inside `backend/`). Otherwise you'll see `No module named backend`.
+> `ls` should show the `backend/` folder before you run them.
+
 ```bash
 # 1. Seed the database with sample users + content
 python -m backend.scripts.seed
@@ -71,6 +75,10 @@ python -m backend.app.main
 # 3. Open the UI
 #    http://127.0.0.1:8000
 ```
+
+If you hit `No module named backend`, you're in the wrong directory — `cd` up to
+the repo root (where `backend/` lives) and re-run. Use `python3` if `python`
+isn't Python 3 on your machine.
 
 > Requires Python 3.10+ (tested on 3.11).
 
