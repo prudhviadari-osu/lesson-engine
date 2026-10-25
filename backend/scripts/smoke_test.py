@@ -247,6 +247,61 @@ def main():
                 {"title": "Recruiter App"}, token=rec_tok)
     check("recruiter cannot publish", s == 403, str(p))
 
+    print("== Portfolio (skills from completed work + guide + get help) ==")
+    # Ensure the demo student has COMPLETED work (a 'done' lesson) to build on —
+    # the same honesty-by-design basis compile uses. Complete one lesson's flow.
+    s, r = call("POST", f"/api/lessons/{lid}/flow/complete", token=stu_tok)
+    check("completed a lesson for portfolio evidence", s == 200 and r["lessonComplete"] is True, str(s))
+
+    # Personal Portfolio: skills + completed work + stats (pure DB read, offline).
+    s, pf = call("GET", "/api/portfolio", token=stu_tok)
+    check("portfolio returns skills+completedWork+stats",
+          s == 200 and "skills" in pf and len(pf["completedWork"]) >= 1
+          and "totalXp" in pf["stats"], str(s))
+
+    # Refresh extracts resume-worthy skills (mock offline) and is idempotent.
+    s, rsk1 = call("POST", "/api/portfolio/skills/refresh", token=stu_tok)
+    check("skills refresh extracts skills (mock offline)",
+          s == 200 and rsk1["extracted"] >= 1 and len(rsk1["skills"]) >= 1, str(rsk1))
+    s, rsk2 = call("POST", "/api/portfolio/skills/refresh", token=stu_tok)
+    check("skills refresh is idempotent (no duplicates)",
+          s == 200 and len(rsk2["skills"]) == len(rsk1["skills"]), str(len(rsk2["skills"])))
+
+    # The Guide: AI-recommended projects (mock offline), honoring ?count=.
+    s, guide = call("GET", "/api/portfolio/guide?count=3", token=stu_tok)
+    check("guide recommends projects (mock offline)",
+          s == 200 and len(guide["projects"]) >= 1 and bool(guide["projects"][0]["name"]), str(s))
+
+    # "Get Help": materialize the project into a REAL gamified staged lesson flow.
+    proj = guide["projects"][0]
+    s, help1 = call("POST", "/api/portfolio/projects/help", {"project": proj}, token=stu_tok)
+    check("get-help materializes a self-assigned assignment + lessons",
+          s == 200 and help1["assignmentId"] and len(help1["lessons"]) >= 1, str(s))
+    # Reachable through the normal staged-flow endpoint (proves it's a real lesson).
+    help_lid = help1["lessons"][0]["id"]
+    s, hflow = call("GET", f"/api/lessons/{help_lid}/flow", token=stu_tok)
+    hstages = [st["type"] for st in hflow.get("stages", [])]
+    check("get-help lesson is a playable staged flow",
+          s == 200 and "intro" in hstages and "complete" in hstages, str(hstages))
+    # Idempotent: asking for help again reuses the same assignment (no duplicate).
+    s, help2 = call("POST", "/api/portfolio/projects/help", {"project": proj}, token=stu_tok)
+    check("get-help is idempotent (reuses the assignment)",
+          s == 200 and help2["reused"] is True and help2["assignmentId"] == help1["assignmentId"], str(help2))
+
+    # Save a recommended project + update its status (PUT; framework has no PATCH).
+    s, saved = call("POST", "/api/portfolio/projects",
+                    {"project": {"name": "Smoke Test Portfolio App", "difficulty": "Beginner"}},
+                    token=stu_tok)
+    check("save a portfolio project", s in (200, 201) and saved.get("id"), str(s))
+    s, upd = call("PUT", f"/api/portfolio/projects/{saved['id']}", {"status": "done"}, token=stu_tok)
+    check("update a saved project's status", s == 200 and upd["status"] == "done", str(upd))
+    s, bad = call("PUT", f"/api/portfolio/projects/{saved['id']}", {"status": "nonsense"}, token=stu_tok)
+    check("invalid project status rejected", s == 400, str(s))
+
+    # Portfolio is STUDENT-only (acts on the caller's own id; no client-supplied id).
+    s, _ = call("GET", "/api/portfolio", token=rec_tok)
+    check("recruiter blocked from portfolio", s == 403, str(s))
+
     print(f"\n==== {PASSES} passed, {FAILS} failed ====")
     sys.exit(1 if FAILS else 0)
 
