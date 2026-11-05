@@ -51,7 +51,7 @@ def build_stages(lesson_id: int) -> tuple[dict, list[dict]]:
     ]
     videos = [b for b in blocks if b["type"] == "video"]
     readings = [b for b in blocks if b["type"] == "excerpt"]
-    challenges = [b for b in blocks if b["type"] in ("scaffold_q", "flashcards")]
+    challenges = [b for b in blocks if b["type"] in ("scaffold_q", "flashcards", "mcq")]
     drafts = [b for b in blocks if b["type"] == "draft"]
 
     stages: list[dict] = []
@@ -67,7 +67,17 @@ def build_stages(lesson_id: int) -> tuple[dict, list[dict]]:
         stages.append({"key": f"reading:{b['id']}", "type": "reading", "title": "Read",
                        "xp": xp["reading"], "blockId": b["id"], "payload": b["payload"]})
     for b in challenges:
-        if b["type"] == "flashcards":
+        if b["type"] == "mcq":
+            stages.append({
+                "key": f"mcq:{b['id']}", "type": "challenge", "challengeKind": "mcq",
+                "title": "Challenge", "xp": xp["challenge"], "blockId": b["id"],
+                "prompt": b["payload"].get("prompt"),
+                "options": b["payload"].get("options") or [],
+                "answerIndex": b["payload"].get("answerIndex"),
+                "explanation": b["payload"].get("explanation") or "",
+                "allowReveal": True,
+            })
+        elif b["type"] == "flashcards":
             cards = b["payload"].get("cards") or []
             for i, card in enumerate(cards):
                 stages.append({
@@ -150,6 +160,13 @@ def get_flow(lesson_id: int, user_id: int | None) -> dict:
             out["savesToAnswer"] = True
         if s.get("challengeKind") == "flashcard" and is_done:
             out["answer"] = s.get("answer")
+        if s.get("challengeKind") == "mcq":
+            out["options"] = s.get("options") or []
+            # Only reveal the correct index + explanation AFTER the stage is done,
+            # so the UI can't peek the answer before the student attempts it.
+            if is_done:
+                out["answerIndex"] = s.get("answerIndex")
+                out["explanation"] = s.get("explanation") or ""
         if "blockId" in s and s["type"] in ("challenge", "draft"):
             ans = repo.get_answer_for_block(s["blockId"])
             if ans and ans["content_text"]:
@@ -232,9 +249,13 @@ def submit_challenge(lesson_id: int, user_id: int | None, stage_key: str, raw_an
     stage = _find_stage(lesson_id, stage_key)
     if stage["type"] != "challenge":
         raise HttpError(400, f'stage "{stage_key}" is not a challenge')
-    answer = str(raw_answer or "").strip()
-    if not answer:
-        raise HttpError(400, "answer is required")
+    # MCQ answers arrive as a chosen option index; others as text.
+    if stage["challengeKind"] != "mcq":
+        answer = str(raw_answer or "").strip()
+        if not answer:
+            raise HttpError(400, "answer is required")
+    else:
+        answer = raw_answer
 
     lesson, assignment = get_lesson_context(lesson_id)
     prof = user_profile_for_ai(user_id)
@@ -243,7 +264,21 @@ def submit_challenge(lesson_id: int, user_id: int | None, stage_key: str, raw_an
     xp_result = {"awarded": False, "xp": 0}
     revealed = None
 
-    if stage["challengeKind"] == "flashcard":
+    if stage["challengeKind"] == "mcq":
+        try:
+            chosen = int(answer)
+        except (TypeError, ValueError):
+            raise HttpError(400, "mcq answer must be the chosen option index")
+        options = stage.get("options") or []
+        if chosen < 0 or chosen >= len(options):
+            raise HttpError(400, "mcq answer index out of range")
+        correct = (chosen == stage.get("answerIndex"))
+        if correct:
+            xp_result = _award_stage(user_id, lesson_id, stage["key"], stage["xp"])
+        # reveal the correct option + explanation after the attempt
+        revealed = {"answerIndex": stage.get("answerIndex"),
+                    "explanation": stage.get("explanation") or ""}
+    elif stage["challengeKind"] == "flashcard":
         correct = _looks_correct(answer, stage.get("answer") or "")
         if correct:
             xp_result = _award_stage(user_id, lesson_id, stage["key"], stage["xp"])
@@ -322,7 +357,25 @@ def complete_flow(lesson_id: int, user_id: int | None) -> dict:
     }
 
 
-def _challenge_feedback_prompt(assignment: dict, lesson: dict, stage: dict, answer: str, correct) -> str:
+def _challenge_feedback_prompt(assignment: dict, lesson: dict, stage: dict, answer, correct) -> str:
+    if stage["challengeKind"] == "mcq":
+        options = stage.get("options") or []
+        try:
+            chosen_text = options[int(answer)]
+        except (TypeError, ValueError, IndexError):
+            chosen_text = str(answer)
+        correct_text = options[stage["answerIndex"]] if 0 <= (stage.get("answerIndex") or -1) < len(options) else ""
+        base = (
+            f"Multiple-choice check in the lesson \"{lesson['title']}\".\n"
+            f"Question: {stage.get('prompt')}\n"
+            f"Student chose: \"{chosen_text}\"\n"
+            f"Correct answer: \"{correct_text}\"\n"
+            f"They were {'CORRECT' if correct else 'INCORRECT'}. "
+        )
+        base += ("Celebrate the specific reasoning that makes it right, in one upbeat line."
+                 if correct else
+                 "Gently explain WHY their choice is off and point toward the right idea — teach, don't scold.")
+        return base
     if stage["challengeKind"] == "flashcard":
         base = (
             f"Quick recall challenge in the lesson \"{lesson['title']}\".\n"

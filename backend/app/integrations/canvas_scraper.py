@@ -50,6 +50,8 @@ class CanvasScraper:
     def _mock_data(self, name_dot_number: str) -> dict[str, Any]:
         now = datetime.now(timezone.utc)
         courses = [
+            {"canvas_course_id": "ECE2060-001", "code": "ECE 2060",
+             "title": "Introduction to Digital Logic", "section": "001"},
             {"canvas_course_id": "CSE2221-001", "code": "CSE 2221",
              "title": "Software I: Software Components", "section": "001"},
             {"canvas_course_id": "MATH1151-012", "code": "MATH 1151",
@@ -58,6 +60,22 @@ class CanvasScraper:
              "title": "Fundamentals of Engineering II", "section": "040"},
         ]
         assignments = [
+            # The demo showcase assignment — the real ECE 2060 number-systems HW.
+            # Its description carries the actual problems so the (offline) lesson
+            # engine builds the deep mastery climb around the real questions.
+            {"course_code": "ECE 2060", "title": "Problem 1 — Number Systems & Base Conversion",
+             "kind": "assignment",
+             "description": (
+                 "ECE 2060 Autumn 2026. Show all steps. "
+                 "1-1 Convert 79, 40, and 4769 (base 10) to base 2. "
+                 "1-2 Convert 10101011 and 0100111011 (base 2) to base 10. "
+                 "1-3 Convert 211(base 3), DE3A(base 16) to base 10; 42855 to hexadecimal; 93.27 to base 4. "
+                 "1-4 Binary addition; 1-5 binary subtraction with borrows; 1-6 binary multiplication; "
+                 "1-7 binary division. 1-8 Negative numbers: sign & magnitude and 2's complement "
+                 "(N* = 2^n - N). 1-9 One's complement. 1-11 Adding 2's- and 1's-complement numbers. "
+                 "1-10 Binary codes: Gray code power savings, 7-bit max, hex and ASCII."
+             ),
+             "due_at": now + timedelta(days=3)},
             {"course_code": "CSE 2221", "title": "Project: Natural Number Calculator",
              "kind": "assignment",
              "description": "Implement a calculator using the NaturalNumber component family.",

@@ -51,9 +51,21 @@ def _build_prompt(assignment: dict, styles: list[str], notes: str) -> str:
         "- Break the assignment down as finely as it allows. A large assignment = more lessons.\n"
         "- Each lesson is one sitting of ~10-15 minutes. Order them so earlier lessons teach the\n"
         "  concept and later lessons apply it to produce pieces of the actual deliverable.\n"
-        "- Block types: 'video' (provide videoQuery), 'excerpt' (provide excerptTopic),\n"
-        "  'scaffold_q' (provide prompt + optional hint), 'draft' (provide instruction + optional\n"
-        "  rubricHint), 'flashcards' (provide cards as {front, back} pairs).\n"
+        "- This is MASTERY-STYLE learning: teach ONE skill deeply per lesson, then CHECK it with\n"
+        "  a progression of challenges before the student produces the real work. Go DEEP — real\n"
+        "  explanations and worked reasoning, not shallow one-liners.\n"
+        "- Block types:\n"
+        "  'video' (provide videoQuery),\n"
+        "  'excerpt' (provide excerptTopic),\n"
+        "  'mcq' (a multiple-choice check: provide prompt, options (3-4 strings), answerIndex\n"
+        "    (0-based index of the correct option), and explanation of WHY it's correct),\n"
+        "  'scaffold_q' (short-answer: provide prompt + optional hint),\n"
+        "  'draft' (provide instruction + optional rubricHint),\n"
+        "  'flashcards' (provide cards as {front, back} pairs).\n"
+        "- Each lesson should MIX challenge types: use 'mcq' to check understanding, 'scaffold_q'\n"
+        "  for the student to explain the method in their own words, then 'draft' to DO a real\n"
+        "  problem from the assignment showing steps. Prefer 2-3 mcq + 1 scaffold_q + 1 draft.\n"
+        "- Write MCQ distractors that reflect realistic mistakes (so a wrong pick is instructive).\n"
         "Return STRICT JSON: {\"lessons\":[{\"title\":str,\"estMinutes\":int,\"blocks\":[...]}]}.\n\n"
         "ASSIGNMENT:\n"
         f"Title: {assignment.get('title')}\n"
@@ -80,6 +92,15 @@ def _normalize_block(b: dict) -> dict:
     if t == "excerpt":
         return {"topic": b.get("excerptTopic", ""), "attachmentId": None, "page": None,
                 "heading": None, "text": None, "url": None, "resolved": False}
+    if t == "mcq":
+        opts = b.get("options") or []
+        ai = b.get("answerIndex")
+        try:
+            ai = int(ai)
+        except (TypeError, ValueError):
+            ai = 0
+        return {"prompt": b.get("prompt", ""), "options": [str(o) for o in opts],
+                "answerIndex": ai, "explanation": b.get("explanation", "")}
     if t == "scaffold_q":
         return {"prompt": b.get("prompt", ""), "hint": b.get("hint", ""), "savesTo": "answer"}
     if t == "draft":

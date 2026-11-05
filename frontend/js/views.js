@@ -256,6 +256,18 @@ const Views = (() => {
           ${body}
           <div class="stage-nav"><span></span>
             <button class="btn" data-advance="${esc(s.key)}">I read it ✓</button></div>`;
+      } else if (s.type === "challenge" && s.challengeKind === "mcq") {
+        const opts = s.options || [];
+        inner = `${kind}${xp}<h3>${esc(s.prompt || "Pick the best answer")}</h3>
+          <div class="mcq-opts" id="mcq-opts">` +
+          opts.map((o, i) => `<button class="mcq-opt" data-mcq-choice="${i}">
+            <span class="mcq-letter">${String.fromCharCode(65 + i)}</span>${esc(o)}</button>`).join("") +
+          `</div>
+          <div id="challenge-feedback"></div>
+          <div class="stage-nav">
+            <button class="btn ghost" data-stage-prev>← Back</button>
+            <span class="muted" id="mcq-skip-hint">Pick an option to check it</span>
+          </div>`;
       } else if (s.type === "challenge") {
         const saved = s.savedAnswer ? esc(s.savedAnswer) : "";
         inner = `${kind}${xp}<h3>${esc(s.prompt || "Quick challenge")}</h3>
@@ -351,6 +363,40 @@ const Views = (() => {
         b.disabled = true;
         try { await API.flowAdvance(lessonId, b.dataset.advance); state.stageIdx++; await load(); }
         catch (e) { window.toast(e.message, true); b.disabled = false; }
+      });
+
+      // MCQ: tap an option -> grade it (answer is the chosen index)
+      const mcqStage = flow.stages[state.stageIdx];
+      root.querySelectorAll("[data-mcq-choice]").forEach((opt) => opt.onclick = async () => {
+        const choice = Number(opt.dataset.mcqChoice);
+        root.querySelectorAll("[data-mcq-choice]").forEach((o) => o.disabled = true);
+        try {
+          const r = await API.flowChallenge(lessonId, mcqStage.key, choice);
+          // color the chosen + the correct option
+          const correctIdx = r.revealed && typeof r.revealed.answerIndex === "number" ? r.revealed.answerIndex : null;
+          root.querySelectorAll("[data-mcq-choice]").forEach((o) => {
+            const i = Number(o.dataset.mcqChoice);
+            if (correctIdx !== null && i === correctIdx) o.classList.add("mcq-correct");
+            if (i === choice && !r.correct) o.classList.add("mcq-wrong");
+          });
+          const cls = r.correct ? "correct" : "tryagain";
+          const expl = r.revealed && r.revealed.explanation ? "\n\n" + r.revealed.explanation : "";
+          setFeedback("challenge-feedback", (r.feedback || "") + expl, cls);
+          if (r.xpAwarded > 0) window.toast(`+${r.xpAwarded} XP!`, false);
+          const skip = document.getElementById("mcq-skip-hint");
+          if (skip) skip.outerHTML = r.correct
+            ? `<button class="btn go" data-stage-next-btn>Next →</button>`
+            : `<button class="btn ghost" data-mcq-retry>Try again</button> <button class="btn" data-stage-next-btn>Skip →</button>`;
+          const nextBtn = root.querySelector("[data-stage-next-btn]");
+          if (nextBtn) nextBtn.onclick = async () => { await load(); };
+          const retry = root.querySelector("[data-mcq-retry]");
+          if (retry) retry.onclick = () => render(flow);
+          // refresh header XP/progress
+          const flow2 = await API.flow(lessonId);
+          root.querySelector(".flow-header").outerHTML = header(flow2);
+          wire(flow2);
+          // re-apply option coloring + feedback after header rewrite wiped nothing here
+        } catch (e) { window.toast(e.message, true); root.querySelectorAll("[data-mcq-choice]").forEach((o) => o.disabled = false); }
       });
 
       const chalBtn = root.querySelector("[data-challenge]");
