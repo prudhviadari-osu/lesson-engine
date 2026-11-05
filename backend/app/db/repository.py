@@ -498,14 +498,27 @@ def get_learning_preferences(user_id: int) -> dict | None:
     ))
 
 
-def upsert_learning_preferences(user_id: int, learning_styles: str, learning_notes: str) -> None:
+def upsert_learning_preferences(user_id: int, learning_styles: str, learning_notes: str,
+                                daily_minutes: int = 120) -> None:
     db.execute(
-        "INSERT INTO learning_preferences (user_id, learning_styles, learning_notes) "
-        "VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET "
+        "INSERT INTO learning_preferences (user_id, learning_styles, learning_notes, daily_minutes) "
+        "VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET "
         "learning_styles = excluded.learning_styles, "
-        "learning_notes = excluded.learning_notes, updated_at = datetime('now')",
-        (user_id, learning_styles, learning_notes),
+        "learning_notes = excluded.learning_notes, "
+        "daily_minutes = excluded.daily_minutes, updated_at = datetime('now')",
+        (user_id, learning_styles, learning_notes, daily_minutes),
     )
+
+
+def get_daily_minutes(user_id: int | None, default: int = 120) -> int:
+    """The user's total study-minutes/day budget (clamped 60-360). Falls back
+    to the default if unset or no user."""
+    if user_id is None:
+        return default
+    row = db.query_one("SELECT daily_minutes FROM learning_preferences WHERE user_id = ?", (user_id,))
+    if not row or row["daily_minutes"] is None:
+        return default
+    return max(60, min(360, int(row["daily_minutes"])))
 
 
 # --- resource cache ---

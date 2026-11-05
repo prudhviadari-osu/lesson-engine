@@ -418,7 +418,15 @@ def get_my_preferences(req: Request):
 def set_my_preferences(req: Request):
     user = req.current_user()
     b = req.body or {}
-    return set_preferences(user["id"], b.get("learningStyles"), b.get("learningNotes"))
+    prefs = set_preferences(user["id"], b.get("learningStyles"), b.get("learningNotes"),
+                            b.get("dailyMinutes"))
+    # If the daily time budget changed, re-flow the schedule to fit it.
+    if b.get("dailyMinutes") is not None and user.get("role") == "student":
+        try:
+            planner_service.generate_plan(user["id"])
+        except Exception:
+            pass  # re-flow is best-effort; preference save already succeeded
+    return prefs
 
 
 # ---- planner + reflow (student) ----

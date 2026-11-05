@@ -64,7 +64,7 @@ const API = (() => {
         { reviewed: true, consented: true, contentHash }),
 
     getPreferences: () => req("GET", "/users/me/preferences"),
-    setPreferences: (learningStyles, learningNotes) => req("PUT", "/users/me/preferences", { learningStyles, learningNotes }),
+    setPreferences: (learningStyles, learningNotes, dailyMinutes) => req("PUT", "/users/me/preferences", { learningStyles, learningNotes, dailyMinutes }),
 
     plan: () => req("GET", "/plan"),
     planReflow: () => req("POST", "/plan/reflow"),

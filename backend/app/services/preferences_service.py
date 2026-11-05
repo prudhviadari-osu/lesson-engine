@@ -13,6 +13,22 @@ from ..web.framework import HttpError
 
 VALID_STYLES = ["visual", "auditory", "reading", "kinesthetic"]
 MAX_STYLES = 2
+MIN_DAILY_MINUTES = 60    # 1 hour
+MAX_DAILY_MINUTES = 360   # 6 hours
+DEFAULT_DAILY_MINUTES = 120
+
+
+def validate_daily_minutes(value) -> int:
+    """Clamp the student's total daily study budget to 1-6 hours (minutes)."""
+    if value is None:
+        return DEFAULT_DAILY_MINUTES
+    try:
+        m = int(round(float(value)))
+    except (TypeError, ValueError):
+        raise HttpError(400, "dailyMinutes must be a number of minutes")
+    if m < MIN_DAILY_MINUTES or m > MAX_DAILY_MINUTES:
+        raise HttpError(400, f"dailyMinutes must be between {MIN_DAILY_MINUTES} (1h) and {MAX_DAILY_MINUTES} (6h)")
+    return m
 
 
 def validate_styles(styles) -> list[str]:
@@ -36,17 +52,27 @@ def validate_styles(styles) -> list[str]:
 def get_preferences(user_id: int) -> dict:
     row = repo.get_learning_preferences(user_id)
     if row is None:
-        return {"learningStyles": [], "learningNotes": ""}
+        return {"learningStyles": [], "learningNotes": "", "dailyMinutes": DEFAULT_DAILY_MINUTES}
+    dm = row["daily_minutes"] if row.get("daily_minutes") is not None else DEFAULT_DAILY_MINUTES
     return {
         "learningStyles": json.loads(row["learning_styles"] or "[]"),
         "learningNotes": row["learning_notes"] or "",
+        "dailyMinutes": max(MIN_DAILY_MINUTES, min(MAX_DAILY_MINUTES, int(dm))),
     }
 
 
-def set_preferences(user_id: int, learning_styles, learning_notes) -> dict:
+def set_preferences(user_id: int, learning_styles, learning_notes, daily_minutes=None) -> dict:
     styles = validate_styles(learning_styles)
     notes = str(learning_notes or "")
-    repo.upsert_learning_preferences(user_id, json.dumps(styles), notes)
+    # Preserve existing daily_minutes if the caller didn't send one.
+    if daily_minutes is None:
+        existing = repo.get_learning_preferences(user_id)
+        minutes = (existing["daily_minutes"] if existing and existing.get("daily_minutes") is not None
+                   else DEFAULT_DAILY_MINUTES)
+        minutes = max(MIN_DAILY_MINUTES, min(MAX_DAILY_MINUTES, int(minutes)))
+    else:
+        minutes = validate_daily_minutes(daily_minutes)
+    repo.upsert_learning_preferences(user_id, json.dumps(styles), notes, minutes)
     return get_preferences(user_id)
 
 

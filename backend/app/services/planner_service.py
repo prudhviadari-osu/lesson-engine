@@ -39,7 +39,7 @@ def _parse_due(due_at: str | None) -> date | None:
 
 
 def generate_plan(user_id: int) -> dict:
-    cap = settings.DAILY_CAP_MIN
+    cap = repo.get_daily_minutes(user_id, settings.DAILY_CAP_MIN)
     buffer_days = settings.SUBMISSION_BUFFER_DAYS
     lessons = repo.list_todo_lessons_for_user(user_id)
     version = repo.max_reflow_version() + 1
@@ -82,7 +82,7 @@ def generate_plan(user_id: int) -> dict:
 
 
 def get_plan(user_id: int, version: int | None = None, overflow: list | None = None) -> dict:
-    cap = settings.DAILY_CAP_MIN
+    cap = repo.get_daily_minutes(user_id, settings.DAILY_CAP_MIN)
     today = _day_str(date.today())
 
     scheduled = repo.list_scheduled_lessons_for_user(user_id)
@@ -122,7 +122,7 @@ def unschedule_lesson(lesson_id: int) -> bool:
 
 
 def reschedule_lesson(user_id: int, lesson_id: int) -> bool:
-    cap = settings.DAILY_CAP_MIN
+    cap = repo.get_daily_minutes(user_id, settings.DAILY_CAP_MIN)
     buffer_days = settings.SUBMISSION_BUFFER_DAYS
     l = repo.get_lesson_for_user(user_id, lesson_id)
     if not l:

@@ -590,6 +590,17 @@ const Views = (() => {
       `</div>
       <label style="margin-top:16px">Anything specific? (optional)
         <textarea class="input" id="pref-notes" rows="3" placeholder="e.g. I like worked examples and short videos">${esc(p.learningNotes || "")}</textarea></label>
+    </div>`;
+
+    // Daily time budget — total study time per day, drives the planner's cap.
+    const dm = p.dailyMinutes || 120;
+    html += `<div class="card"><h3>Time per day</h3>
+      <p class="muted">How much total time do you have to study each day? Your climb gets paced to fit — no cramming, no overload.</p>
+      <div class="row" style="margin-top:12px;gap:14px">
+        <input type="range" id="pref-daily" min="60" max="360" step="30" value="${dm}" style="flex:1" oninput="document.getElementById('pref-daily-label').textContent = (this.value/60).toFixed(this.value%60?1:0) + 'h'">
+        <strong id="pref-daily-label" style="min-width:48px;text-align:right">${(dm/60).toFixed(dm%60?1:0)}h</strong>
+      </div>
+      <div class="row" style="justify-content:space-between;color:var(--muted);font-size:.78rem"><span>1 hour</span><span>6 hours</span></div>
       <div style="margin-top:14px"><button class="btn" data-save-preferences>Save preferences</button></div>
     </div>`;
     return html;

@@ -212,8 +212,10 @@
       if (el.dataset.planReschedule) { await API.planReschedule(el.dataset.planReschedule); toast("Scheduled"); return navigate("plan"); }
       if (el.dataset.savePreferences !== undefined) {
         const styles = [...document.querySelectorAll("#style-chips .style-chip.selected")].map((c) => c.dataset.style);
-        await API.setPreferences(styles, document.getElementById("pref-notes").value);
-        toast("Preferences saved"); return navigate("preferences");
+        const dailyEl = document.getElementById("pref-daily");
+        const dailyMinutes = dailyEl ? Number(dailyEl.value) : undefined;
+        await API.setPreferences(styles, document.getElementById("pref-notes").value, dailyMinutes);
+        toast("Preferences saved — your plan was updated to fit"); return navigate("preferences");
       }
       if (el.dataset.newThread) {
         const cid = el.dataset.newThread;

@@ -186,6 +186,7 @@ CREATE TABLE IF NOT EXISTS learning_preferences (
     user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     learning_styles TEXT NOT NULL DEFAULT '[]',  -- JSON array (visual|auditory|reading|kinesthetic)
     learning_notes TEXT NOT NULL DEFAULT '',
+    daily_minutes INTEGER NOT NULL DEFAULT 120,   -- total study time/day the student has (60-360 = 1-6h)
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
