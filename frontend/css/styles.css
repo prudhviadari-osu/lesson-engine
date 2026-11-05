@@ -380,6 +380,44 @@ label .input { margin-top: 4px; }
 .quiz-opt.correct { background: var(--mint-soft); border-color: var(--mint); }
 .quiz-opt.wrong { background: var(--coral-soft); border-color: var(--coral); }
 
+/* ====================================================================
+   SHARED THEMED ACCENTS — tie every screen to the mountain/academia look
+   ==================================================================== */
+/* a compact themed page header used across Plan/Portfolio/Courses/etc. */
+.page-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  background: linear-gradient(135deg, var(--lav-soft), #fff);
+  border: 1px solid var(--line); border-left: 5px solid var(--lav);
+  border-radius: var(--radius); padding: 18px 20px; margin-bottom: 18px; box-shadow: var(--shadow);
+}
+.page-head .ph-icon { font-size: 1.7rem; }
+.page-head h3 { margin: 0; color: var(--navy); font-size: 1.3rem; }
+.page-head p { margin-top: 2px; }
+.page-head.peak { background: linear-gradient(135deg, var(--mint-soft), #fff); border-left-color: var(--mint); }
+.page-head.gold { background: linear-gradient(135deg, var(--gold-soft), #fff); border-left-color: var(--gold); }
+.page-head.read { background: linear-gradient(135deg, #eef3fb, #fff); border-left-color: var(--navy); }
+
+/* cards lift a touch on hover for a livelier feel (opt-in via .lift) */
+.card.lift { transition: transform .14s, box-shadow .2s; }
+.card.lift:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+
+/* section titles get a small trail marker */
+.section-title::before { content: "⛰️"; font-size: 1.05rem; }
+
+/* skill pills in the portfolio read as little summit badges */
+.skill-badges { display: flex; flex-wrap: wrap; gap: 8px; }
+.skill-badge { background: var(--mint-soft); color: var(--mint-ink); border: 1px solid var(--mint); border-radius: 999px; padding: 5px 13px; font-weight: 700; font-size: .82rem; }
+
+/* admin / data tables, themed */
+.table { width: 100%; border-collapse: collapse; }
+.table th { text-align: left; color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; padding: 8px 10px; border-bottom: 2px solid var(--line); }
+.table td { padding: 9px 10px; border-bottom: 1px solid var(--line); }
+.table tr:hover td { background: var(--paper); }
+
+/* plan day card: a little "camp" marker */
+.day-card { border-left: 4px solid var(--mint); }
+.day-card.over { border-left-color: var(--coral); }
+
 /* ---------- Responsive ---------- */
 @media (max-width: 820px) {
   .app-shell { grid-template-columns: 1fr; }

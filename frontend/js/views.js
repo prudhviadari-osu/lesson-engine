@@ -127,11 +127,13 @@ const Views = (() => {
   // ---------------- COURSES / LESSONS ----------------
   async function courses(user) {
     const list = await API.get("/courses").catch(() => []);
-    if (!list.length) return `<div class="empty">You have no courses.</div>`;
-    let html = `<div class="grid">`;
+    let head = `<div class="page-head read"><div class="row" style="gap:12px"><span class="ph-icon">🏔️</span>
+      <div><h3>Your ranges</h3><p class="muted">Each course is a mountain range. Pick one and start climbing its assignments.</p></div></div></div>`;
+    if (!list.length) return head + `<div class="empty">You have no courses yet.</div>`;
+    let html = head + `<div class="grid">`;
     for (const c of list) {
       const members = await API.get(`/courses/${c.id}/members`).catch(() => []);
-      html += `<div class="card">
+      html += `<div class="card lift">
         <h3>${esc(c.code)}</h3>
         <div class="muted-row">${esc(c.title)}</div>
         <div class="muted-row">Section ${esc(c.section)} · ${esc(c.term)} · ${members.length} members</div>
@@ -503,25 +505,26 @@ const Views = (() => {
   // -------------- PLANNER --------------
   async function plan() {
     const p = await API.plan();
-    let html = `<div class="card"><div class="row" style="justify-content:space-between">
-      <div><h3>Your study plan</h3>
-        <p class="muted">Scheduled backward from each due date, ${p.dailyCapMin} min/day cap, ${p.submissionBufferDays}-day submission buffer.</p></div>
+    let html = `<div class="page-head peak">
+      <div class="row" style="gap:12px"><span class="ph-icon">🗺️</span>
+        <div><h3>Your climb plan</h3>
+          <p class="muted">Each day's ascent, paced backward from due dates — ${p.dailyCapMin} min/day cap, ${p.submissionBufferDays}-day summit buffer.</p></div></div>
       <div class="row"><span class="streak-badge">🔥 ${p.todayStreak} today</span>
-        <button class="btn sm" data-plan-reflow>Reflow</button></div>
-    </div></div>`;
-    if (!p.days.length) html += `<div class="empty">No scheduled lessons. Hit Reflow to build your plan.</div>`;
+        <button class="btn sm go" data-plan-reflow>↻ Re-route</button></div>
+    </div>`;
+    if (!p.days.length) html += `<div class="empty">No climbs scheduled. Hit “Re-route” to map your ascent. 🧭</div>`;
     p.days.forEach((d) => {
-      html += `<div class="card" style="margin:0 0 12px"><div class="row" style="justify-content:space-between">
-        <strong>${esc(d.date)}</strong>
-        <span class="pill ${d.overCapacity ? "due" : "ok"}">${d.loadMinutes} min${d.overCapacity ? " · over cap" : ""}</span></div>
+      html += `<div class="card day-card ${d.overCapacity ? "over" : ""}" style="margin:0 0 12px"><div class="row" style="justify-content:space-between">
+        <strong>⛺ ${esc(d.date)}</strong>
+        <span class="pill ${d.overCapacity ? "due" : "ok"}">${d.loadMinutes} min${d.overCapacity ? " · steep day" : ""}</span></div>
         <div class="stack" style="margin-top:8px">` +
         d.lessons.map((l) => `<div class="row" style="justify-content:space-between">
           <span>${esc(l.title)} <span class="muted">(~${l.est_minutes}m · ${esc(l.assignment)})</span></span>
           <button class="btn ghost sm" data-plan-unschedule="${l.lesson_id}">Unschedule</button></div>`).join("") +
         `</div></div>`;
     });
-    html += `<div class="section-title"><h3 style="margin:0">Backlog</h3><span class="pill">unscheduled</span></div>`;
-    if (!p.unscheduled.length) html += `<div class="empty">Backlog is empty.</div>`;
+    html += `<div class="section-title"><h3 style="margin:0">Basecamp backlog</h3><span class="pill">unscheduled</span></div>`;
+    if (!p.unscheduled.length) html += `<div class="empty">Basecamp is clear — nothing waiting. ⛺</div>`;
     else html += `<div class="stack">` + p.unscheduled.map((l) => `<div class="card" style="margin:0"><div class="row" style="justify-content:space-between">
       <span>${esc(l.title)} <span class="muted">(~${l.est_minutes}m · ${esc(l.assignment)})</span></span>
       <button class="btn sm" data-plan-reschedule="${l.lesson_id}">Schedule</button></div></div>`).join("") + `</div>`;
@@ -533,8 +536,9 @@ const Views = (() => {
     const p = await API.getPreferences();
     const STYLES = [["visual", "👁️ Visual"], ["auditory", "👂 Auditory"], ["reading", "📖 Reading/Writing"], ["kinesthetic", "✋ Kinesthetic"]];
     const selected = new Set(p.learningStyles);
-    let html = `<div class="card"><h3>Learning style</h3>
-      <p class="muted">Pick up to 2. We tailor your lessons and Coach to match — without ever changing the "do your own work" rules.</p>
+    let html = `<div class="page-head"><div class="row" style="gap:12px"><span class="ph-icon">🧭</span>
+      <div><h3>Your climbing style</h3><p class="muted">How do you like to learn? Pick up to 2 — we tailor your lessons and Coach to match (the “do your own work” rules never change).</p></div></div></div>
+      <div class="card"><h3>Learning style</h3>
       <div class="row" id="style-chips" style="margin-top:12px">` +
       STYLES.map(([k, label]) => `<span class="style-chip ${selected.has(k) ? "selected" : ""}" data-style="${k}">${esc(label)}</span>`).join("") +
       `</div>
@@ -588,11 +592,11 @@ const Views = (() => {
           <div><button class="btn sm" data-publish-project>Publish to showcase</button></div>
         </div></div>`;
     }
-    html += `<div class="section-title"><h3 style="margin:0">Student Showcase</h3>
+    html += `<div class="section-title"><h3 style="margin:0">Summit Showcase</h3>
       <span class="pill">visible to recruiters</span></div>`;
-    if (!showcase.length) html += `<div class="empty">No published projects yet.</div>`;
+    if (!showcase.length) html += `<div class="empty">No projects summited yet.</div>`;
     showcase.forEach((p) => {
-      html += `<div class="card"><h3>${esc(p.title)}</h3>
+      html += `<div class="card lift"><h3>${esc(p.title)}</h3>
         <p>${esc(p.description)}</p>
         ${p.tech_stack ? `<div class="muted-row">🧰 ${esc(p.tech_stack)}</div>` : ""}
         ${p.repo_url ? `<div class="muted-row">🔗 <a href="${esc(p.repo_url)}" target="_blank" rel="noopener">${esc(p.repo_url)}</a></div>` : ""}
@@ -645,10 +649,10 @@ const Views = (() => {
   // ---------------- ADVISOR ----------------
   async function advisor() {
     const recs = await API.get("/advisor/recommendations").catch((e) => { throw e; });
-    let html = `<div class="card"><h3>Schedule Advisor</h3>
-      <p class="muted">Recommended courses for next semester, based on your current enrollment (OSU class search).</p></div>`;
+    let html = `<div class="page-head read"><div class="row" style="gap:12px"><span class="ph-icon">🧭</span>
+      <div><h3>Next peaks to plan</h3><p class="muted">Suggested courses for next semester, based on your current climb (OSU class search).</p></div></div></div>`;
     if (!recs.length) return html + `<div class="empty">No recommendations yet.</div>`;
-    html += `<div class="grid">` + recs.map((r) => `<div class="card">
+    html += `<div class="grid">` + recs.map((r) => `<div class="card lift">
       <h3>${esc(r.code)}</h3><div class="muted-row">${esc(r.title)} · ${r.credit_hours} cr</div>
       <p style="margin:10px 0 0">${esc(r.reason)}</p></div>`).join("") + `</div>`;
     return html;
@@ -666,9 +670,9 @@ const Views = (() => {
           <button class="btn sm" data-add-recruiter>Add</button>
         </div>
       </div></div>`;
-    html += `<div class="card"><table style="width:100%;border-collapse:collapse">
-      <tr style="text-align:left;color:var(--muted)"><th>Email</th><th>Company</th></tr>` +
-      recs.map((r) => `<tr><td style="padding:6px 0">${esc(r.email)}</td><td>${esc(r.company)}</td></tr>`).join("") +
+    html += `<div class="card"><table class="table">
+      <tr><th>Email</th><th>Company</th></tr>` +
+      recs.map((r) => `<tr><td>${esc(r.email)}</td><td>${esc(r.company)}</td></tr>`).join("") +
       `</table></div>`;
     return html;
   }
@@ -704,21 +708,21 @@ const Views = (() => {
 
     function statsBar(s) {
       if (!s) return "";
-      return `<div class="xp-bar-wrap">
+      return `<div class="flow-badges">
         <span class="xp-badge">⭐ ${s.totalXp} XP</span>
-        <span class="streak-badge">🔥 ${s.todayStreak} today</span>
-        <span class="muted" style="font-size:.8rem">Daily goal ${s.dailyXp}/${s.dailyGoal}</span>
-        <div class="goal-track"><div class="goal-fill" style="width:${s.dailyGoalPct}%"></div></div>
-        ${s.dailyGoalMet ? `<span class="pill ok">goal met 🎉</span>` : ""}
+        <span class="streak-badge">🔥 ${s.todayStreak} day${s.todayStreak === 1 ? "" : "s"}</span>
+        <span class="goal-mini">Daily goal
+          <span class="goal-track"><span class="goal-fill" style="width:${s.dailyGoalPct}%"></span></span>
+          ${s.dailyXp}/${s.dailyGoal}${s.dailyGoalMet ? " 🎉" : ""}</span>
       </div>`;
     }
 
     function skillsList(skills) {
       if (!skills || !skills.length) {
-        return `<div class="empty">No skills yet. Finish a lesson, then hit "Refresh skills" to build your resume from the work you actually completed.</div>`;
+        return `<div class="empty">No summit badges yet. Finish a lesson, then hit “Refresh skills” to earn badges from the work you actually completed. 🏅</div>`;
       }
-      return `<div class="row" style="flex-wrap:wrap;gap:8px">` +
-        skills.map((s) => `<span class="pill ok" title="${esc(s.evidence || s.source || "")}">${esc(s.skill)}</span>`).join("") +
+      return `<div class="skill-badges">` +
+        skills.map((s) => `<span class="skill-badge" title="${esc(s.evidence || s.source || "")}">🏅 ${esc(s.skill)}</span>`).join("") +
         `</div>`;
     }
 
@@ -765,13 +769,13 @@ const Views = (() => {
 
     function render() {
       const s = pf && pf.stats;
-      let html = `<div class="card"><div class="row" style="justify-content:space-between">
-        <div><h3 style="margin:0">Your Portfolio</h3>
-          <p class="muted">An AI-built, honesty-by-design portfolio: skills come ONLY from coursework you actually completed. Then get recommended projects that build on them.</p></div>
-      </div>${statsBar(s)}</div>`;
+      let html = `<div class="page-head gold"><div class="row" style="gap:12px"><span class="ph-icon">🎒</span>
+        <div><h3>Your climbing record</h3>
+          <p class="muted">An honest, AI-built portfolio — summit badges come ONLY from coursework you actually completed. Then get recommended projects that take you higher.</p></div></div></div>
+      <div class="card">${statsBar(s)}</div>`;
 
       // --- Guide ---
-      html += `<div class="section-title"><h3 style="margin:0">Portfolio Guide</h3>
+      html += `<div class="section-title"><h3 style="margin:0">Expedition Guide</h3>
         <span class="pill">recommended projects</span></div>`;
       html += `<div class="card"><div class="row" style="justify-content:space-between">
         <p class="muted" style="margin:0">Projects that build on your current skills. Each one can become a real, playable gamified lesson flow.</p>
