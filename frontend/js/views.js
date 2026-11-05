@@ -20,40 +20,107 @@ const Views = (() => {
     return `<span class="pill ${cls}">due in ${d} day${d === 1 ? "" : "s"}</span>`;
   }
 
-  // ---------------- HOME ----------------
+  // ---------------- HOME = "THE DAILY CLIMB" ----------------
+  // A mountain-ascent journey: today's scheduled lessons are waypoints climbing
+  // toward the day's summit (the XP goal). Mature-but-playful; a climber marker
+  // (🧗) sits on your next stop. Falls back to a due-soon climb if no plan yet.
   async function home(user) {
-    const courses = await API.get("/courses").catch(() => []);
-    let dueSoon = [];
-    for (const c of courses) {
-      const as = await API.get(`/courses/${c.id}/assignments`).catch(() => []);
-      as.forEach((a) => { if (daysUntil(a.due_at) >= 0 && daysUntil(a.due_at) <= 7) dueSoon.push({ ...a, course: c }); });
-    }
-    dueSoon.sort((a, b) => new Date(a.due_at) - new Date(b.due_at));
-
-    const greeting = `Welcome back, ${esc(user.full_name.split(" ")[0])}!`;
-    let html = `<div class="card"><h3>${greeting}</h3>
-      <p class="muted">Role: <strong style="text-transform:capitalize">${esc(user.role)}</strong>${user.company ? " · " + esc(user.company) : ""}</p></div>`;
+    const first = esc((user.full_name || "there").split(" ")[0]);
 
     if (user.role === "recruiter") {
-      html += `<div class="card"><h3>Recruiter access</h3>
+      return `<div class="card"><h3>Welcome, ${first}</h3>
         <p class="muted">You have access to the <a href="#" data-nav="projects">student project showcase</a>. Course content is restricted.</p></div>`;
+    }
+
+    // Prefer the planner's schedule; fall back to assignments due within 7 days.
+    let plan = null;
+    try { plan = await API.plan(); } catch { plan = null; }
+
+    // Build today's "stops" (lesson waypoints) + find the course for each.
+    const courses = await API.get("/courses").catch(() => []);
+    const courseById = {};
+    courses.forEach((c) => { courseById[c.id] = c; });
+
+    let stops = [];
+    let streak = 0, dailyXp = 0, dailyGoal = 50, goalPct = 0, goalMet = false;
+
+    if (plan && plan.days && plan.days.length) {
+      const today = plan.days[0];
+      streak = plan.todayStreak ?? 0;
+      stops = (today.lessons || []).map((l) => ({
+        lessonId: l.lesson_id ?? l.lessonId, title: l.title,
+        course: l.course_code || l.course || "", minutes: l.est_minutes ?? l.minutes,
+        courseId: l.course_id ?? l.courseId, assignmentId: l.assignment_id ?? l.assignmentId,
+        done: (l.status === "done"),
+      }));
+    }
+
+    // Fallback: derive climb from due-soon assignments (first lesson each).
+    if (!stops.length) {
+      for (const c of courses) {
+        const as = await API.get(`/courses/${c.id}/assignments`).catch(() => []);
+        as.forEach((a) => {
+          if (daysUntil(a.due_at) >= 0 && daysUntil(a.due_at) <= 7 && a.has_lessons && a.lessons && a.lessons[0]) {
+            stops.push({ lessonId: a.lessons[0].id, title: a.lessons[0].title, course: c.code,
+              minutes: a.lessons[0].est_minutes, courseId: c.id, assignmentId: a.id,
+              done: a.lessons[0].status === "done" });
+          }
+        });
+      }
+    }
+
+    const totalMin = stops.reduce((s, x) => s + (x.minutes || 0), 0);
+    const doneCount = stops.filter((s) => s.done).length;
+    const currentIdx = stops.findIndex((s) => !s.done);
+
+    // Hero
+    let html = `<div class="journey-hero">
+      <div>
+        <h2>⛰️ ${first}'s <span class="peak">Daily Climb</span></h2>
+        <div class="sub">${stops.length ? `${stops.length} stop${stops.length === 1 ? "" : "s"} to today's summit · about ${totalMin} min. Climb a little — don't cram.` : "No climb scheduled today. Set a plan to start your ascent."}</div>
+      </div>
+      <div class="journey-stats">
+        <div class="stat-chip"><span class="n">🔥 ${streak}</span><span class="l">Day streak</span></div>
+        <div class="stat-chip gold"><span class="n">${doneCount}/${stops.length || 0}</span><span class="l">Stops</span></div>
+      </div>
+    </div>`;
+
+    if (!stops.length) {
+      html += `<div class="empty">Your trail is clear. 🏔️ Head to <a href="#" data-nav="plan">Study Plan</a> to schedule today's climb, or <a href="#" data-nav="courses">Courses</a> to start a lesson.</div>`;
       return html;
     }
 
-    html += `<div class="section-title"><h3 style="margin:0">Due in the next 7 days</h3></div>`;
-    if (!dueSoon.length) {
-      html += `<div class="empty">Nothing due soon. 🎉</div>`;
-    } else {
-      html += `<div class="stack">` + dueSoon.map((a) => `
-        <div class="card" style="margin:0">
-          <div class="row" style="justify-content:space-between">
-            <div><strong>${esc(a.title)}</strong><div class="muted-row">${esc(a.course.code)} · ${esc(a.kind)}</div></div>
-            <div class="row">${duePill(a.due_at)}
-              <button class="btn sm" data-lesson-assignment="${a.id}" data-course="${a.course.id}">${a.has_lessons ? "Start lessons" : "Generate lessons"}</button>
-            </div>
+    // The ascent — rendered summit-first (top) down to basecamp (bottom).
+    html += `<div class="climb">
+      <div class="summit"><span class="flag">🏔️</span>
+        <div><div class="s-title">Today's summit</div>
+          <div class="s-sub">Reach the top by finishing your stops${goalMet ? " — summit reached! 🎉" : ""}</div></div>
+      </div>`;
+
+    // stops top (last/highest) → bottom (first/basecamp)
+    const ordered = [...stops].reverse();
+    ordered.forEach((s, ri) => {
+      const idx = stops.length - 1 - ri;            // original order index
+      const isCurrent = idx === currentIdx;
+      const stateCls = s.done ? "done" : isCurrent ? "current" : "";
+      const nodeIcon = s.done ? "✓" : isCurrent ? "⛳" : "🧗";
+      html += `<div class="climb-stop ${stateCls}">
+        <div class="climb-line">
+          <div class="climb-node">${isCurrent ? `<span class="climber">🧗</span>` : ""}${s.done ? "✓" : (idx + 1)}</div>
+          <div class="climb-connector"></div>
+        </div>
+        <div class="climb-card ${s.done ? "done" : ""}" data-lesson-flow="${s.lessonId}" data-course="${s.courseId}" data-assignment="${s.assignmentId}">
+          <div>
+            <div class="course">${esc(s.course)}</div>
+            <div class="title">${esc(s.title)}</div>
+            <div class="meta"><span class="pill">~${esc(s.minutes || 10)} min</span>${s.done ? `<span class="pill ok">climbed ✓</span>` : isCurrent ? `<span class="pill soon">you're here</span>` : ""}</div>
           </div>
-        </div>`).join("") + `</div>`;
-    }
+          <span class="btn sm ${s.done ? "ghost" : ""}">${s.done ? "Review" : isCurrent ? "Climb →" : "Start"}</span>
+        </div>
+      </div>`;
+    });
+    html += `<div class="basecamp">⛺ Basecamp — your climb starts here</div></div>`;
+
     return html;
   }
 
@@ -129,44 +196,52 @@ const Views = (() => {
       render(flow);
     }
 
+    const KIND = { intro: ["k-intro", "Intro"], video: ["k-watch", "Watch"], reading: ["k-read", "Read"], challenge: ["k-challenge", "Challenge"], draft: ["k-draft", "Draft"], complete: ["k-intro", "Summit"] };
+
     function header(flow) {
       const g = flow.gamification;
+      const pct = flow.progress.progressPct;
       return `<div class="flow-header">
-        <button class="btn ghost sm" data-lesson-assignment="${assignmentId}" data-course="${courseId}">← Lessons</button>
-        <div class="flow-title" style="margin-top:10px">${esc(flow.lessonTitle)}</div>
-        <div class="xp-bar-wrap">
+        <div class="flow-top">
+          <div style="min-width:0">
+            <button class="btn ghost sm" data-lesson-assignment="${assignmentId}" data-course="${courseId}">← Trail map</button>
+            <div class="flow-title">${esc(flow.lessonTitle)}</div>
+          </div>
+          <div class="ring" style="--p:${pct}"><span class="ring-label">${pct}%</span></div>
+        </div>
+        <div class="flow-badges">
           <span class="xp-badge">⭐ ${g.totalXp} XP</span>
-          <span class="streak-badge">🔥 ${g.todayStreak} today</span>
-          <span class="muted" style="font-size:.8rem">Progress</span>
-          <div class="progress-track"><div class="progress-fill" style="width:${flow.progress.progressPct}%"></div></div>
-          <span class="muted" style="font-size:.8rem">${flow.progress.progressPct}%</span>
+          <span class="streak-badge">🔥 ${g.todayStreak} day${g.todayStreak === 1 ? "" : "s"}</span>
+          <span class="goal-mini">Daily goal
+            <span class="goal-track"><span class="goal-fill" style="width:${g.dailyGoalPct}%"></span></span>
+            ${g.dailyXp}/${g.dailyGoal}${g.dailyGoalMet ? " 🎉" : ""}</span>
         </div>
-        <div class="xp-bar-wrap">
-          <span class="muted" style="font-size:.8rem">Daily goal ${g.dailyXp}/${g.dailyGoal}</span>
-          <div class="goal-track"><div class="goal-fill" style="width:${g.dailyGoalPct}%"></div></div>
-          ${g.dailyGoalMet ? `<span class="pill ok">goal met 🎉</span>` : ""}
-        </div>
-        <div class="stage-rail">${flow.stages.map((s, i) =>
-          `<div class="stage-dot ${s.done ? "done" : ""} ${i === state.stageIdx ? "current" : ""}" data-stage-jump="${i}" title="${esc(s.title)}">${s.done ? "✓" : i + 1}</div>`).join("")}</div>
+        <div class="stage-rail">${flow.stages.map((s, i) => {
+          const [, label] = KIND[s.type] || ["", s.type];
+          return `<div class="stage-seg ${s.done ? "done" : ""} ${i === state.stageIdx ? "current" : ""}" data-stage-jump="${i}" title="${esc(s.title)}">
+            <div class="bar"></div><div class="tick">${s.done ? "✓" : label}</div></div>`;
+        }).join("")}</div>
       </div>`;
     }
 
     function stageBody(flow) {
       const s = flow.stages[state.stageIdx];
       if (!s) return `<div class="empty">No stage.</div>`;
+      const [kc, kl] = KIND[s.type] || ["k-intro", s.type];
+      const kind = `<span class="stage-kind ${kc}">${kl}</span>`;
       const xp = `<span class="pill stage-xp">+${s.xp} XP</span>`;
       let inner = "";
       if (s.type === "intro") {
-        inner = `<span class="stage-kind">Intro</span>${xp}<h3>${esc(s.title)}</h3>
+        inner = `${kind}${xp}<h3>${esc(s.title)}</h3>
           <p>${esc(s.body || "")}</p>
           <div class="stage-nav"><span></span>
-            <button class="btn" data-advance="${esc(s.key)}">Let's go →</button></div>`;
+            <button class="btn go" data-advance="${esc(s.key)}">Start the climb →</button></div>`;
       } else if (s.type === "video") {
         const p = s.payload || {};
         const embed = p.embedUrl
           ? `<iframe class="embed-video" src="${esc(p.embedUrl)}" allowfullscreen></iframe>`
           : `<p class="muted">No embedded video available offline. <a href="${esc(p.url)}" target="_blank" rel="noopener">Search YouTube for this topic →</a></p>`;
-        inner = `<span class="stage-kind">Watch</span>${xp}<h3>${esc(p.title || "Watch a short teaching video")}</h3>
+        inner = `${kind}${xp}<h3>${esc(p.title || "Watch a short teaching video")}</h3>
           ${embed}
           <div class="stage-nav"><span></span>
             <button class="btn" data-advance="${esc(s.key)}">I watched it ✓</button></div>`;
@@ -175,24 +250,24 @@ const Views = (() => {
         const body = p.resolved && p.text
           ? `<div class="reading-box">${esc(p.text)}</div>${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">Read more →</a>` : ""}`
           : `<p class="muted">Reading not fetched offline. <a href="${esc(p.url)}" target="_blank" rel="noopener">Look up this topic →</a></p>`;
-        inner = `<span class="stage-kind">Read</span>${xp}<h3>${esc(p.heading || "Read the excerpt")}</h3>
+        inner = `${kind}${xp}<h3>${esc(p.heading || "Read the excerpt")}</h3>
           ${body}
           <div class="stage-nav"><span></span>
             <button class="btn" data-advance="${esc(s.key)}">I read it ✓</button></div>`;
       } else if (s.type === "challenge") {
         const saved = s.savedAnswer ? esc(s.savedAnswer) : "";
-        inner = `<span class="stage-kind">Challenge</span>${xp}<h3>${esc(s.prompt || "Quick challenge")}</h3>
-          ${s.hint ? `<p class="muted">💡 Hint: ${esc(s.hint)}</p>` : ""}
+        inner = `${kind}${xp}<h3>${esc(s.prompt || "Quick challenge")}</h3>
+          ${s.hint ? `<div class="hint-line">💡 ${esc(s.hint)}</div>` : ""}
           <textarea class="input" id="challenge-input" rows="3" placeholder="Type your answer in your own words...">${saved}</textarea>
           <div id="challenge-feedback"></div>
           <div class="stage-nav">
             <button class="btn ghost" data-stage-prev>← Back</button>
-            <button class="btn" data-challenge="${esc(s.key)}">Submit answer</button>
+            <button class="btn go" data-challenge="${esc(s.key)}">Check my answer</button>
           </div>`;
       } else if (s.type === "draft") {
         const saved = s.savedAnswer ? esc(s.savedAnswer) : "";
-        inner = `<span class="stage-kind">Draft</span>${xp}<h3>${esc(s.prompt || "Draft the deliverable")}</h3>
-          ${s.rubricHint ? `<p class="muted">📋 ${esc(s.rubricHint)}</p>` : ""}
+        inner = `${kind}${xp}<h3>${esc(s.prompt || "Draft the deliverable")}</h3>
+          ${s.rubricHint ? `<div class="hint-line">📋 ${esc(s.rubricHint)}</div>` : ""}
           <p class="muted" style="font-size:.82rem">This is YOUR work — Coach gives feedback but never writes it for you.</p>
           <textarea class="input" id="draft-input" rows="6" placeholder="Write your own draft here...">${saved}</textarea>
           <div id="draft-feedback"></div>
@@ -201,11 +276,11 @@ const Views = (() => {
             <button class="btn" data-draft="${esc(s.key)}">Save draft + get feedback</button>
           </div>`;
       } else if (s.type === "complete") {
-        inner = `<div class="celebrate"><div class="big">🎉</div>
-          <h3>Lesson complete!</h3>
-          <p class="muted">Great work — you built real understanding, in your own words.</p>
-          <div style="height:12px"></div>
-          <button class="btn" data-complete>Finish & claim bonus (+${s.xp} XP)</button></div>`;
+        inner = `<div class="celebrate"><div class="big">🏔️</div>
+          <h3>Summit reached!</h3>
+          <p class="muted">You climbed this lesson start to finish — real understanding, in your own words.</p>
+          <div style="height:14px"></div>
+          <button class="btn go" data-complete>Plant your flag (+${s.xp} XP) 🚩</button></div>`;
       }
       return `<div class="stage-card">${inner}</div>`;
     }
@@ -230,7 +305,30 @@ const Views = (() => {
 
     function setFeedback(id, text, cls) {
       const el = document.getElementById(id);
-      if (el) el.innerHTML = `<div class="feedback-box ${cls || ""}">${esc(text)}</div>`;
+      if (!el) return;
+      const head = cls === "correct" ? "✅ Nice — you've got it!"
+        : cls === "tryagain" ? "🔁 Not quite — give it another go"
+        : "🧑‍🏫 Coach";
+      el.innerHTML = `<div class="feedback-box ${cls || "coach"}">
+        <div class="fb-head">${head}</div>${esc(text)}</div>`;
+    }
+
+    function confetti() {
+      const layer = document.createElement("div");
+      layer.className = "confetti-layer";
+      const colors = ["#79D6B0", "#FFCB70", "#A99AEF", "#F28C83", "#243B67"];
+      for (let i = 0; i < 90; i++) {
+        const c = document.createElement("div");
+        c.className = "confetti";
+        c.style.left = Math.random() * 100 + "vw";
+        c.style.background = colors[i % colors.length];
+        c.style.animationDuration = (2 + Math.random() * 1.8) + "s";
+        c.style.animationDelay = (Math.random() * 0.5) + "s";
+        c.style.transform = `rotate(${Math.random() * 360}deg)`;
+        layer.appendChild(c);
+      }
+      document.body.appendChild(layer);
+      setTimeout(() => layer.remove(), 4200);
     }
 
     function renderCoach(history) {
@@ -296,8 +394,22 @@ const Views = (() => {
         done.disabled = true;
         try {
           const r = await API.flowComplete(lessonId);
-          window.toast(r.completionBonus > 0 ? `Lesson done! +${r.completionBonus} XP 🎉` : "Lesson complete!");
-          await load();
+          const g = r.gamification || {};
+          confetti();
+          // celebratory summit screen with an XP/streak tally
+          root.querySelector(".stage-card").innerHTML = `<div class="celebrate">
+            <div class="big">🚩</div>
+            <h3>Peak conquered!</h3>
+            <p class="muted">On to the next summit. Keep the streak alive.</p>
+            <div class="tally">
+              <span class="t-chip">+${r.completionBonus || 0} XP</span>
+              <span class="t-chip streak">🔥 ${g.todayStreak ?? ""} day streak</span>
+            </div>
+            <div><button class="btn go" data-lesson-assignment="${assignmentId}" data-course="${courseId}">Back to trail map →</button></div>
+          </div>`;
+          // the global click delegation in app.js handles the data-lesson-assignment
+          // button, so no extra wiring is needed here.
+          window.toast(r.completionBonus > 0 ? `+${r.completionBonus} XP · summit reached! 🏔️` : "Summit reached! 🏔️", false);
         } catch (e) { window.toast(e.message, true); done.disabled = false; }
       };
 
