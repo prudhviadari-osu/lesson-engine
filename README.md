@@ -52,7 +52,8 @@ No third-party packages required — Python standard library + SQLite out of the
 > show `backend/` first. Use `python3` if `python` isn't Python 3.
 
 ```bash
-# 1. Seed the demo data
+# 1. Rebuild the demo database, then seed it
+rm -f backend/learnpp.db
 python3 -m backend.scripts.seed
 
 # 2. Start the server (serves the API + UI on one origin)
@@ -63,6 +64,12 @@ python3 -m backend.app.main
 ```
 
 > Requires Python 3.10+ (tested on 3.11–3.13).
+
+> ⚠️ **After every `git pull`, re-run step 1** (`rm -f backend/learnpp.db` then
+> seed). The database is a generated file (gitignored) — pulling new code does
+> **not** update it, so you'll keep seeing old lessons/content until you rebuild
+> it. If something looks stale or missing (e.g. a course or question type you
+> expected isn't there), this is almost always why.
 
 ### Try the demo
 
