@@ -29,6 +29,11 @@ def _excerpt(topic):
 def _mcq(prompt, options, answer_index, explanation):
     return {"type": "mcq", "prompt": prompt, "options": options,
             "answerIndex": answer_index, "explanation": explanation}
+def _numeric(prompt, answer, explanation, unit="", tolerance=0):
+    return {"type": "numeric", "prompt": prompt, "answer": answer,
+            "unit": unit, "tolerance": tolerance, "explanation": explanation}
+def _fill(prompt, accepted, explanation):
+    return {"type": "fill_blank", "prompt": prompt, "accepted": accepted, "explanation": explanation}
 def _sa(prompt, hint=""):
     return {"type": "scaffold_q", "prompt": prompt, "hint": hint}
 def _draft(instruction, rubric=""):
@@ -67,6 +72,13 @@ def _mock_number_systems_lessons() -> dict:
                     "13 = 1·8 + 1·4 + 0·2 + 1·1 = 1101₂. Check: 8+4+1 = 13. ✓"),
                 _sa("In your own words, why do you read the remainders from bottom to top when dividing by 2?",
                     "Think about which remainder corresponds to the 1's place (the smallest power of 2)."),
+                _numeric("Warm-up (auto-graded): convert 13₁₀ to binary. Type the bits only.",
+                         "1101", "13 = 8+4+1 = 1101₂.", unit="(base 2)"),
+                _fill("Fill in the blank: in repeated division by 2, the FIRST remainder you get is the ____ bit (the 1's place).",
+                      ["last", "least significant", "lsb", "rightmost", "last one", "bottom"],
+                      "The first remainder is the least-significant (rightmost) bit — which is why you read bottom-to-top."),
+                _numeric("Quick check (auto-graded): what is 40₁₀ in binary? Type the bits.",
+                         "101000", "40 = 32+8 = 101000₂.", unit="(base 2)"),
                 _draft("HW 1-1.1 — Convert 79₁₀ to base 2. Show every division-by-2 step and the remainders, then write the final binary number.",
                        "Show all steps (repeated division), not just the answer — the rubric gives 0 for a right answer with the wrong/again missing approach."),
                 _draft("HW 1-1.2 — Convert 40₁₀ to base 2. Show your work.",
@@ -341,6 +353,13 @@ def mock_tutor_reply(message: str) -> str:
 
 
 def mock_challenge_feedback(challenge_kind: str, correct: bool | None) -> str:
+    if challenge_kind in ("numeric", "fill_blank"):
+        if correct:
+            return "Spot on! ✅ Your answer checks out exactly — that's the method working. On to the next step. 🧗"
+        return (
+            "Not quite — close though. Re-trace the steps of the method (line them up carefully) and "
+            "check your final value against each place; the explanation below shows the target. Give it another go!"
+        )
     if challenge_kind == "mcq":
         if correct:
             return "Exactly right! ✅ You picked the option for the right reason — that's the idea locked in."

@@ -277,6 +277,18 @@ const Views = (() => {
             <button class="btn ghost" data-stage-prev>← Back</button>
             <span class="muted" id="mcq-skip-hint">Pick an option to check it</span>
           </div>`;
+      } else if (s.type === "challenge" && (s.challengeKind === "numeric" || s.challengeKind === "fill_blank")) {
+        const isNum = s.challengeKind === "numeric";
+        const label = isNum ? "Auto-graded" : "Fill in the blank";
+        const ph = isNum ? "Type your exact answer…" : "Type the missing word/value…";
+        inner = `${kind}${xp}<h3>${esc(s.prompt || "")}</h3>
+          <p class="muted" style="font-size:.8rem">✅ ${label} — checked instantly.${isNum && s.unit ? " " + esc(s.unit) : ""}</p>
+          <input class="input" id="exact-input" placeholder="${ph}" autocomplete="off" />
+          <div id="challenge-feedback"></div>
+          <div class="stage-nav">
+            <button class="btn ghost" data-stage-prev>← Back</button>
+            <button class="btn go" data-exact="${esc(s.key)}">Check answer</button>
+          </div>`;
       } else if (s.type === "challenge") {
         const saved = s.savedAnswer ? esc(s.savedAnswer) : "";
         inner = `${kind}${xp}<h3>${esc(s.prompt || "Quick challenge")}</h3>
@@ -407,6 +419,36 @@ const Views = (() => {
           // re-apply option coloring + feedback after header rewrite wiped nothing here
         } catch (e) { window.toast(e.message, true); root.querySelectorAll("[data-mcq-choice]").forEach((o) => o.disabled = false); }
       });
+
+      // numeric / fill-in-the-blank: typed answer, auto-graded exactly
+      const exactBtn = root.querySelector("[data-exact]");
+      if (exactBtn) {
+        const submitExact = async () => {
+          const val = document.getElementById("exact-input").value.trim();
+          if (!val) return window.toast("Type an answer first", true);
+          exactBtn.disabled = true;
+          try {
+            const r = await API.flowChallenge(lessonId, exactBtn.dataset.exact, val);
+            const cls = r.correct ? "correct" : "tryagain";
+            const rev = r.revealed || {};
+            const ans = rev.answer !== undefined ? rev.answer : (rev.accepted ? rev.accepted[0] : "");
+            const expl = rev.explanation ? "\n\n" + rev.explanation : "";
+            const ansLine = (!r.correct && ans) ? `\n\nAnswer: ${ans}` : "";
+            setFeedback("challenge-feedback", (r.feedback || "") + ansLine + expl, cls);
+            if (r.xpAwarded > 0) window.toast(`+${r.xpAwarded} XP!`, false);
+            const nav = root.querySelector(".stage-nav");
+            if (nav && r.correct) nav.innerHTML = `<span></span><button class="btn go" data-stage-next-btn>Next →</button>`;
+            const nb = root.querySelector("[data-stage-next-btn]");
+            if (nb) nb.onclick = async () => { await load(); };
+            const flow2 = await API.flow(lessonId);
+            root.querySelector(".flow-header").outerHTML = header(flow2);
+            wire(flow2);
+          } catch (e) { window.toast(e.message, true); exactBtn.disabled = false; }
+        };
+        exactBtn.onclick = submitExact;
+        const inp = document.getElementById("exact-input");
+        if (inp) inp.onkeydown = (e) => { if (e.key === "Enter") submitExact(); };
+      }
 
       const chalBtn = root.querySelector("[data-challenge]");
       if (chalBtn) chalBtn.onclick = async () => {

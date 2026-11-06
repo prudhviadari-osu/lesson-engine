@@ -51,7 +51,7 @@ def build_stages(lesson_id: int) -> tuple[dict, list[dict]]:
     ]
     videos = [b for b in blocks if b["type"] == "video"]
     readings = [b for b in blocks if b["type"] == "excerpt"]
-    challenges = [b for b in blocks if b["type"] in ("scaffold_q", "flashcards", "mcq")]
+    challenges = [b for b in blocks if b["type"] in ("scaffold_q", "flashcards", "mcq", "numeric", "fill_blank")]
     drafts = [b for b in blocks if b["type"] == "draft"]
 
     stages: list[dict] = []
@@ -74,6 +74,26 @@ def build_stages(lesson_id: int) -> tuple[dict, list[dict]]:
                 "prompt": b["payload"].get("prompt"),
                 "options": b["payload"].get("options") or [],
                 "answerIndex": b["payload"].get("answerIndex"),
+                "explanation": b["payload"].get("explanation") or "",
+                "allowReveal": True,
+            })
+        elif b["type"] == "numeric":
+            stages.append({
+                "key": f"numeric:{b['id']}", "type": "challenge", "challengeKind": "numeric",
+                "title": "Challenge", "xp": xp["challenge"], "blockId": b["id"],
+                "prompt": b["payload"].get("prompt"),
+                "unit": b["payload"].get("unit") or "",          # e.g. "(base 2)"
+                "answer": b["payload"].get("answer"),            # exact expected string
+                "tolerance": b["payload"].get("tolerance", 0),   # for decimal answers
+                "explanation": b["payload"].get("explanation") or "",
+                "allowReveal": True,
+            })
+        elif b["type"] == "fill_blank":
+            stages.append({
+                "key": f"fill_blank:{b['id']}", "type": "challenge", "challengeKind": "fill_blank",
+                "title": "Challenge", "xp": xp["challenge"], "blockId": b["id"],
+                "prompt": b["payload"].get("prompt"),            # contains "____"
+                "accepted": b["payload"].get("accepted") or [],  # list of acceptable answers
                 "explanation": b["payload"].get("explanation") or "",
                 "allowReveal": True,
             })
@@ -167,6 +187,17 @@ def get_flow(lesson_id: int, user_id: int | None) -> dict:
             if is_done:
                 out["answerIndex"] = s.get("answerIndex")
                 out["explanation"] = s.get("explanation") or ""
+        if s.get("challengeKind") == "numeric":
+            out["unit"] = s.get("unit") or ""
+            if is_done:  # reveal only after attempt
+                out["answer"] = s.get("answer")
+                out["explanation"] = s.get("explanation") or ""
+        if s.get("challengeKind") == "fill_blank":
+            # the prompt (with the ____) is already in out["prompt"]; never send
+            # the accepted answers until the stage is done
+            if is_done:
+                out["accepted"] = s.get("accepted") or []
+                out["explanation"] = s.get("explanation") or ""
         if "blockId" in s and s["type"] in ("challenge", "draft"):
             ans = repo.get_answer_for_block(s["blockId"])
             if ans and ans["content_text"]:
@@ -232,6 +263,32 @@ def _normalize(s) -> str:
     return " ".join("".join(out).split())
 
 
+def _numeric_correct(answer: str, expected, tolerance=0) -> bool:
+    """Exact-answer auto-grade. Strips spaces/case and common separators; if both
+    sides parse as decimals, compares within tolerance; else exact string match
+    (so binary/hex strings like '1001111' or 'DE3A' grade exactly)."""
+    a = _normalize(answer).replace(" ", "")
+    e = _normalize(str(expected or "")).replace(" ", "")
+    if not e:
+        return False
+    if a == e:
+        return True
+    try:
+        fa, fe = float(a), float(e)
+        return abs(fa - fe) <= float(tolerance or 0)
+    except (TypeError, ValueError):
+        return False
+
+
+def _fill_blank_correct(answer: str, accepted: list) -> bool:
+    """True if the typed answer matches any accepted answer (case/space-insensitive)."""
+    a = _normalize(answer)
+    for acc in accepted or []:
+        if a == _normalize(str(acc)):
+            return True
+    return False
+
+
 def _looks_correct(answer: str, known: str) -> bool:
     a, k = _normalize(answer), _normalize(known)
     if not a or not k:
@@ -251,12 +308,12 @@ def submit_challenge(lesson_id: int, user_id: int | None, stage_key: str, raw_an
     if stage["type"] != "challenge":
         raise HttpError(400, f'stage "{stage_key}" is not a challenge')
     # MCQ answers arrive as a chosen option index; others as text.
-    if stage["challengeKind"] != "mcq":
+    if stage["challengeKind"] == "mcq":
+        answer = raw_answer
+    else:
         answer = str(raw_answer or "").strip()
         if not answer:
             raise HttpError(400, "answer is required")
-    else:
-        answer = raw_answer
 
     lesson, assignment = get_lesson_context(lesson_id)
     prof = user_profile_for_ai(user_id)
@@ -279,6 +336,16 @@ def submit_challenge(lesson_id: int, user_id: int | None, stage_key: str, raw_an
         # reveal the correct option + explanation after the attempt
         revealed = {"answerIndex": stage.get("answerIndex"),
                     "explanation": stage.get("explanation") or ""}
+    elif stage["challengeKind"] == "numeric":
+        correct = _numeric_correct(answer, stage.get("answer"), stage.get("tolerance", 0))
+        if correct:
+            xp_result = _award_stage(user_id, lesson_id, stage["key"], stage["xp"])
+        revealed = {"answer": stage.get("answer"), "explanation": stage.get("explanation") or ""}
+    elif stage["challengeKind"] == "fill_blank":
+        correct = _fill_blank_correct(answer, stage.get("accepted") or [])
+        if correct:
+            xp_result = _award_stage(user_id, lesson_id, stage["key"], stage["xp"])
+        revealed = {"accepted": stage.get("accepted") or [], "explanation": stage.get("explanation") or ""}
     elif stage["challengeKind"] == "flashcard":
         correct = _looks_correct(answer, stage.get("answer") or "")
         if correct:
@@ -359,6 +426,18 @@ def complete_flow(lesson_id: int, user_id: int | None) -> dict:
 
 
 def _challenge_feedback_prompt(assignment: dict, lesson: dict, stage: dict, answer, correct) -> str:
+    if stage["challengeKind"] in ("numeric", "fill_blank"):
+        exp = stage.get("answer") if stage["challengeKind"] == "numeric" else (stage.get("accepted") or [None])[0]
+        base = (
+            f"Auto-graded answer check in the lesson \"{lesson['title']}\".\n"
+            f"Question: {stage.get('prompt')}\n"
+            f"Correct answer: {exp}\n"
+            f'Student answered: "{answer}" -> {"CORRECT" if correct else "INCORRECT"}. '
+        )
+        base += ("Celebrate the right result in one upbeat line and reinforce the method."
+                 if correct else
+                 "Gently point out it's off and nudge toward the right method/step — do NOT just restate the answer; teach the step they likely missed.")
+        return base
     if stage["challengeKind"] == "mcq":
         options = stage.get("options") or []
         try:

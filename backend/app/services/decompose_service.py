@@ -59,6 +59,11 @@ def _build_prompt(assignment: dict, styles: list[str], notes: str) -> str:
         "  'excerpt' (provide excerptTopic),\n"
         "  'mcq' (a multiple-choice check: provide prompt, options (3-4 strings), answerIndex\n"
         "    (0-based index of the correct option), and explanation of WHY it's correct),\n"
+        "  'numeric' (auto-graded exact answer: provide prompt, answer (the exact expected\n"
+        "    result as a string, e.g. '1001111' or '79'), optional unit (e.g. '(base 2)'),\n"
+        "    optional tolerance for decimals, and explanation),\n"
+        "  'fill_blank' (a sentence with a '____' blank: provide prompt containing ____, accepted\n"
+        "    (a list of acceptable answers), and explanation),\n"
         "  'scaffold_q' (short-answer: provide prompt + optional hint),\n"
         "  'draft' (provide instruction + optional rubricHint),\n"
         "  'flashcards' (provide cards as {front, back} pairs).\n"
@@ -101,6 +106,14 @@ def _normalize_block(b: dict) -> dict:
             ai = 0
         return {"prompt": b.get("prompt", ""), "options": [str(o) for o in opts],
                 "answerIndex": ai, "explanation": b.get("explanation", "")}
+    if t == "numeric":
+        return {"prompt": b.get("prompt", ""), "answer": str(b.get("answer", "")),
+                "unit": b.get("unit", ""), "tolerance": b.get("tolerance", 0),
+                "explanation": b.get("explanation", "")}
+    if t == "fill_blank":
+        acc = b.get("accepted") or []
+        return {"prompt": b.get("prompt", ""), "accepted": [str(a) for a in acc],
+                "explanation": b.get("explanation", "")}
     if t == "scaffold_q":
         return {"prompt": b.get("prompt", ""), "hint": b.get("hint", ""), "savesTo": "answer"}
     if t == "draft":
