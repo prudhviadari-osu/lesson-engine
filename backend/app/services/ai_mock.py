@@ -27,6 +27,18 @@ def _video(q):
 def _excerpt(topic):
     return {"type": "excerpt", "excerptTopic": topic}
 def _mcq(prompt, options, answer_index, explanation):
+    # Call sites always pass the correct option first (answer_index=0). To avoid
+    # the correct answer always being option "A", move it to a varied-but-
+    # DETERMINISTIC slot derived from a stable property of the question (the
+    # prompt length). This keeps the SAME correct answer text, just at a
+    # different position, and is fully reproducible across seeds/runs/smoke tests.
+    options = list(options)
+    n = len(options)
+    if n > 1 and 0 <= answer_index < n:
+        target = len(prompt or "") % n
+        correct = options.pop(answer_index)
+        options.insert(target, correct)
+        answer_index = target
     return {"type": "mcq", "prompt": prompt, "options": options,
             "answerIndex": answer_index, "explanation": explanation}
 def _numeric(prompt, answer, explanation, unit="", tolerance=0):
