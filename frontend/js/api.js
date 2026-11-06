@@ -63,6 +63,9 @@ const API = (() => {
       req("POST", `/courses/${courseId}/assignments/${assignmentId}/compile/consent`,
         { reviewed: true, consented: true, contentHash }),
 
+    getKeys: () => req("GET", "/users/me/keys"),
+    setKeys: (geminiKey, youtubeKey) => req("PUT", "/users/me/keys", { geminiKey, youtubeKey }),
+    clearKeys: () => req("POST", "/users/me/keys/clear"),
     getPreferences: () => req("GET", "/users/me/preferences"),
     setPreferences: (learningStyles, learningNotes, dailyMinutes) => req("PUT", "/users/me/preferences", { learningStyles, learningNotes, dailyMinutes }),
 

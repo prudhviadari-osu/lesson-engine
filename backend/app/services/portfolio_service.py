@@ -117,7 +117,8 @@ def extract_skills(user_id: int) -> dict:
             "note": "no completed work yet — finish a lesson first",
         }
 
-    svc = GeminiService()
+    from ..core import session_keys
+    svc = session_keys.gemini_for(user_id)
     if svc.use_mock:
         data = ai_mock.mock_portfolio_skills(work)
     else:  # pragma: no cover - network path
@@ -178,7 +179,8 @@ def recommend_projects(user_id: int, count: int = 5) -> dict:
         }
 
     skill_names = [s["skill"] for s in skills]
-    svc = GeminiService()
+    from ..core import session_keys
+    svc = session_keys.gemini_for(user_id)
     cached = False
     if svc.use_mock:
         data = ai_mock.mock_portfolio_projects(skill_names, count)

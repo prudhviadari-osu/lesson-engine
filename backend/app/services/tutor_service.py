@@ -98,7 +98,8 @@ def start_session(lesson_id: int, user_id: int | None, reset: bool = False) -> d
 
     prof = user_profile_for_ai(user_id)
     styles, notes = prof["learningStyles"], prof["learningNotes"]
-    svc = GeminiService()
+    from ..core import session_keys
+    svc = session_keys.gemini_for(user_id)
     model_used = "mock"
     if svc.use_mock:
         text = ai_mock.mock_tutor_opening(lesson["title"], styles)
@@ -133,7 +134,8 @@ def send_message(lesson_id: int, user_id: int | None, message) -> dict:
 
     prof = user_profile_for_ai(user_id)
     styles, notes = prof["learningStyles"], prof["learningNotes"]
-    svc = GeminiService()
+    from ..core import session_keys
+    svc = session_keys.gemini_for(user_id)
     model_used = "mock"
     if svc.use_mock:
         reply = ai_mock.mock_tutor_reply(text)

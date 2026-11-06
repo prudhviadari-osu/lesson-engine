@@ -108,7 +108,11 @@
     } catch (err) { $("signup-error").textContent = err.message; }
   });
 
-  $("logout-btn").onclick = () => { API.clearSession(); showAuth(); hideAllAuthForms(); $("role-picker").classList.remove("hidden"); };
+  $("logout-btn").onclick = () => {
+    // Best-effort: wipe this session's in-memory API keys on the server too.
+    API.clearKeys().catch(() => {});
+    API.clearSession(); showAuth(); hideAllAuthForms(); $("role-picker").classList.remove("hidden");
+  };
 
   // ---------------- NAV + ROUTING ----------------
   function buildNav(user) {
@@ -196,7 +200,7 @@
       return;
     }
 
-    const el = e.target.closest("[data-nav],[data-course-assignments],[data-course-forum],[data-lesson-assignment],[data-lesson-flow],[data-compile],[data-reply],[data-new-thread],[data-moderate],[data-comment],[data-publish-project],[data-new-announcement],[data-add-recruiter],[data-save-profile],[data-save-preferences],[data-plan-reflow],[data-plan-unschedule],[data-plan-reschedule]");
+    const el = e.target.closest("[data-nav],[data-course-assignments],[data-course-forum],[data-lesson-assignment],[data-lesson-flow],[data-compile],[data-reply],[data-new-thread],[data-moderate],[data-comment],[data-publish-project],[data-new-announcement],[data-add-recruiter],[data-save-profile],[data-save-preferences],[data-save-keys],[data-clear-keys],[data-plan-reflow],[data-plan-unschedule],[data-plan-reschedule]");
     if (!el) return;
 
     if (el.dataset.nav) return navigate(el.dataset.nav);
@@ -210,6 +214,16 @@
       if (el.dataset.planReflow !== undefined) { await API.planReflow(); toast("Plan reflowed"); return navigate("plan"); }
       if (el.dataset.planUnschedule) { await API.planUnschedule(el.dataset.planUnschedule); toast("Moved to backlog"); return navigate("plan"); }
       if (el.dataset.planReschedule) { await API.planReschedule(el.dataset.planReschedule); toast("Scheduled"); return navigate("plan"); }
+      if (el.dataset.saveKeys !== undefined) {
+        const g = document.getElementById("key-gemini").value.trim();
+        const y = document.getElementById("key-youtube").value.trim();
+        const r = await API.setKeys(g, y);
+        toast(r.mode === "live" ? "Live AI enabled for this session 🚀" : "Saved (mock mode — add a Gemini key to go live)");
+        return navigate("profile");
+      }
+      if (el.dataset.clearKeys !== undefined) {
+        await API.clearKeys(); toast("Keys cleared — back to demo content"); return navigate("profile");
+      }
       if (el.dataset.savePreferences !== undefined) {
         const styles = [...document.querySelectorAll("#style-chips .style-chip.selected")].map((c) => c.dataset.style);
         const dailyEl = document.getElementById("pref-daily");

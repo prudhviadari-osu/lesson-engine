@@ -737,7 +737,32 @@ const Views = (() => {
   // ---------------- PROFILE ----------------
   async function profile() {
     const u = await API.get("/users/me");
-    return `<div class="card"><h3>Edit profile</h3>
+    let keys = { demoAccount: false, geminiKeySet: false, youtubeKeySet: false, mode: "mock" };
+    try { keys = await API.getKeys(); } catch (e) {}
+
+    // --- AI keys (per session, never stored) ---
+    let keysCard;
+    if (keys.demoAccount) {
+      keysCard = `<div class="card"><h3>AI keys</h3>
+        <p class="muted">This is the demo account — it always runs on built-in demo content (mock mode), so no key is needed. 🎬</p>
+        <span class="pill ok">Mode: demo / mock</span></div>`;
+    } else {
+      keysCard = `<div class="card"><h3>AI keys <span class="pill ${keys.mode === "live" ? "ok" : ""}">${keys.mode === "live" ? "live AI ✓" : "mock mode"}</span></h3>
+        <p class="muted">Paste your own API keys to turn on live AI (real Coach replies, generated lessons, embedded videos). Keys are kept <strong>only for this session, in memory</strong> — never saved to disk or our database, and gone when you log out. Leave blank to use built-in demo content.</p>
+        <div class="stack" style="margin-top:10px">
+          <label>Gemini API key ${keys.geminiKeySet ? '<span class="pill ok">set</span>' : ""}
+            <input class="input" id="key-gemini" type="password" placeholder="${keys.geminiKeySet ? "•••••••• (set this session)" : "AIza…"}" /></label>
+          <label>YouTube API key (optional) ${keys.youtubeKeySet ? '<span class="pill ok">set</span>' : ""}
+            <input class="input" id="key-youtube" type="password" placeholder="${keys.youtubeKeySet ? "•••••••• (set this session)" : "AIza…"}" /></label>
+          <div class="row">
+            <button class="btn" data-save-keys>Use my keys this session</button>
+            ${(keys.geminiKeySet || keys.youtubeKeySet) ? `<button class="btn ghost" data-clear-keys>Clear keys</button>` : ""}
+          </div>
+          <p class="muted" style="font-size:.78rem">Get a free Gemini key at aistudio.google.com/apikey. Your key is never shared or stored.</p>
+        </div></div>`;
+    }
+
+    return keysCard + `<div class="card"><h3>Edit profile</h3>
       <p class="muted">Add GitHub & LinkedIn. Social media links (Instagram, TikTok, YouTube) are not allowed.</p>
       <div class="stack" style="margin-top:10px">
         <label>Full name<input class="input" id="pf-name" value="${esc(u.full_name)}" /></label>

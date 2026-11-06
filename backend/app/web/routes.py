@@ -414,6 +414,37 @@ def get_my_preferences(req: Request):
     return get_preferences(user["id"])
 
 
+# ---- per-session API keys (account settings; held in memory, never persisted) ----
+@router.get("/api/users/me/keys")
+def get_my_keys(req: Request):
+    from ..core import session_keys
+    user = req.current_user()
+    # Never returns the key values — only whether they're set + the mode.
+    return session_keys.status_for(user)
+
+
+@router.put("/api/users/me/keys")
+def set_my_keys(req: Request):
+    from ..core import session_keys
+    user = req.current_user()
+    if session_keys.is_demo_account(user):
+        # The demo account is always mock; ignore any submitted keys.
+        return {**session_keys.status_for(user),
+                "note": "This is the demo account — it always runs on mock, so keys are ignored."}
+    b = req.body or {}
+    session_keys.set_keys(user["id"],
+                          gemini=b.get("geminiKey"), youtube=b.get("youtubeKey"))
+    return session_keys.status_for(user)
+
+
+@router.post("/api/users/me/keys/clear")
+def clear_my_keys(req: Request):
+    from ..core import session_keys
+    user = req.current_user()
+    session_keys.clear_keys(user["id"])
+    return session_keys.status_for(user)
+
+
 @router.put("/api/users/me/preferences")
 def set_my_preferences(req: Request):
     user = req.current_user()

@@ -211,8 +211,9 @@ def _style_line(styles: list[str], notes: str) -> str:
     return " ".join(bits)
 
 
-def _coach_feedback(system: str, prompt: str) -> tuple[str, str]:
-    svc = GeminiService()
+def _coach_feedback(system: str, prompt: str, user_id: int | None = None) -> tuple[str, str]:
+    from ..core import session_keys
+    svc = session_keys.gemini_for(user_id)
     if svc.use_mock:
         return "", "mock"
     try:  # pragma: no cover - network path
@@ -291,7 +292,7 @@ def submit_challenge(lesson_id: int, user_id: int | None, stage_key: str, raw_an
 
     system = f"{_COACH_RULES} {_style_line(prof['learningStyles'], prof['learningNotes'])}".strip()
     prompt = _challenge_feedback_prompt(assignment, lesson, stage, answer, correct)
-    feedback, model_used = _coach_feedback(system, prompt)
+    feedback, model_used = _coach_feedback(system, prompt, user_id)
     if not feedback:
         feedback = ai_mock.mock_challenge_feedback(stage["challengeKind"], correct)
 
@@ -330,7 +331,7 @@ def submit_draft(lesson_id: int, user_id: int | None, stage_key: str, raw_conten
         + (f"Rubric hint: {stage.get('rubricHint')}\n" if stage.get('rubricHint') else "")
         + f'\nStudent\'s draft:\n"""{content}"""'
     )
-    feedback, model_used = _coach_feedback(system, prompt)
+    feedback, model_used = _coach_feedback(system, prompt, user_id)
     if not feedback:
         feedback = ai_mock.mock_draft_feedback()
 

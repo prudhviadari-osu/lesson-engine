@@ -113,7 +113,8 @@ def _normalize_block(b: dict) -> dict:
 
 def decompose_assignment(assignment: dict, user_id: int | None, styles: list[str], notes: str) -> dict:
     """Decompose + persist lessons/blocks for an assignment. Replaces any existing."""
-    svc = GeminiService()
+    from ..core import session_keys
+    svc = session_keys.gemini_for(user_id)
     cached = False
     generated_by = "mock"
 

@@ -64,12 +64,12 @@ def _hash_request(parts: Any) -> str:
     return hashlib.sha256(json.dumps(parts, sort_keys=True, default=str).encode()).hexdigest()
 
 
-def _call_with_fallback(payload: dict) -> tuple[dict, str]:
+def _call_with_fallback(payload: dict, api_key: str | None = None) -> tuple[dict, str]:
     """Try each model in the chain; retry transient errors with backoff."""
     import urllib.error
     import urllib.request
 
-    key = settings.GEMINI_API_KEY
+    key = api_key or settings.GEMINI_API_KEY
     if not key:
         raise NoApiKey("GEMINI_API_KEY is not set.")
 
@@ -114,8 +114,15 @@ def _extract_text(data: dict) -> str:
 class GeminiService:
     """Low-level Gemini access (ported from the JS gemini.js)."""
 
-    def __init__(self) -> None:
-        self.use_mock = settings.USE_MOCK_INTEGRATIONS or not settings.GEMINI_API_KEY
+    def __init__(self, *, api_key: str | None = None, force_mock: bool = False) -> None:
+        # Per-call key (from the user's session) takes precedence over any
+        # server-wide env key. force_mock (the demo account) always mocks.
+        self.api_key = api_key if api_key else (settings.GEMINI_API_KEY or None)
+        self.use_mock = (
+            force_mock
+            or settings.USE_MOCK_INTEGRATIONS
+            or not self.api_key
+        )
 
     # -- structured JSON (decompose) ---------------------------------------
     def generate_json(self, *, prompt: str, cache_key_extra: str = "") -> dict[str, Any]:
@@ -138,7 +145,7 @@ class GeminiService:
                 "responseMimeType": "application/json",
             },
         }
-        data, model_used = _call_with_fallback(payload)  # pragma: no cover - network
+        data, model_used = _call_with_fallback(payload, self.api_key)  # pragma: no cover - network
         parsed = json.loads(_extract_text(data))  # pragma: no cover - network
         repo.cache_set("gemini", request_hash, parsed)  # pragma: no cover - network
         return {"data": parsed, "cached": False, "model_used": model_used}  # pragma: no cover
@@ -172,5 +179,5 @@ class GeminiService:
         if system and system.strip():
             payload["systemInstruction"] = {"parts": [{"text": system}]}
 
-        data, model_used = _call_with_fallback(payload)  # pragma: no cover - network
+        data, model_used = _call_with_fallback(payload, self.api_key)  # pragma: no cover - network
         return {"text": _extract_text(data), "model_used": model_used}  # pragma: no cover
