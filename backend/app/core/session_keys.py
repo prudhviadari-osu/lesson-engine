@@ -79,7 +79,13 @@ def force_mock_for(user: dict | None) -> bool:
 
 
 def gemini_for(user_id: int | None):
-    """Build a GeminiService configured for this user's session (key + demo mock).
+    """Build a GeminiService for this user's session.
+
+    - Demo account (buckeye.1) -> always mock (force_mock), ships preloaded content.
+    - Any other user -> uses the key they pasted in Account Settings (live AI).
+      If they have no key, the service is in `needs_key` state and the caller
+      surfaces a friendly "add your key" message. (In practice non-demo accounts
+      have no assignments yet — Canvas OAuth2 is pending — so this rarely fires.)
     Imported lazily to avoid a circular import at module load."""
     from ..db import repository as repo
     from ..integrations.gemini_service import GeminiService

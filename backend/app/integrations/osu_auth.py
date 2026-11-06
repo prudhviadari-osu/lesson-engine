@@ -19,7 +19,7 @@ MOCK_2FA_CODE = "000000"
 
 class OSUAuth:
     def __init__(self) -> None:
-        self.use_mock = settings.USE_MOCK_INTEGRATIONS
+        self.use_mock = settings.STUB_CAMPUS_INTEGRATIONS
 
     def verify_exists(self, name_dot_number: str | None) -> bool:
         """Cross-verify the OSU identity exists."""

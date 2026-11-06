@@ -71,11 +71,9 @@ def main() -> None:
         major="Computer Science & Engineering", grad_year=2027,
         github_url="https://github.com/jordanlee", bio="CSE sophomore.",
     )
-    student2 = _user(
-        email="scarlet.2@osu.edu", username="scarlet", full_name="Priya Natarajan",
-        role="student", osu_name_dot_number="scarlet.2",
-        major="Computer Science & Engineering", grad_year=2026,
-    )
+    # (Only the demo account buckeye.1 is seeded with content. A second student
+    # isn't needed and would otherwise get pulled in as a course member; sign up
+    # a fresh account to see the honest empty "Canvas coming soon" state.)
 
     # --- Recruiter accounts (on the registry) ---
     _user(email="recruiter.google@learnpp.test", username="googlerec",
@@ -86,11 +84,11 @@ def main() -> None:
     # --- Learning-style preferences (tailors the AI lesson engine) ---
     set_preferences(student["id"], ["visual", "kinesthetic"],
                     "I learn best with diagrams and by trying things hands-on.")
-    set_preferences(student2["id"], ["reading"], "")
 
-    # --- Canvas sync for students (creates courses/assignments/members) ---
+    # --- Canvas sync: ONLY the demo account (buckeye.1) gets preloaded content.
+    # Canvas ingestion isn't live yet (OAuth2 approval pending), so every other
+    # account honestly starts empty with a "Canvas integration coming soon" state.
     sync_user_from_canvas(student)
-    sync_user_from_canvas(student2)
 
     # --- Auto-generate interactive lessons for assignments due within 7 days.
     # Each assignment is decomposed into a staged flow (intro -> watch -> read

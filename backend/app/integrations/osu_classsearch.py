@@ -27,7 +27,7 @@ _NEXT_COURSE_MAP: dict[str, dict] = {
 
 class OSUClassSearch:
     def __init__(self) -> None:
-        self.use_mock = settings.USE_MOCK_INTEGRATIONS
+        self.use_mock = settings.STUB_CAMPUS_INTEGRATIONS
 
     def recommend_next(self, current_course_codes: list[str]) -> list[dict]:
         if self.use_mock:

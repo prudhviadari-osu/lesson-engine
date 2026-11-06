@@ -118,11 +118,12 @@ class GeminiService:
         # Per-call key (from the user's session) takes precedence over any
         # server-wide env key. force_mock (the demo account) always mocks.
         self.api_key = api_key if api_key else (settings.GEMINI_API_KEY or None)
-        self.use_mock = (
-            force_mock
-            or settings.USE_MOCK_INTEGRATIONS
-            or not self.api_key
-        )
+        # Mock ONLY for the demo account (force_mock). A non-demo user with no
+        # key is NOT silently mocked — services check `needs_key` and prompt the
+        # student to add their key in Account Settings. There is no global mock.
+        self.force_mock = force_mock
+        self.use_mock = force_mock                       # demo account -> mock content
+        self.needs_key = (not force_mock) and (not self.api_key)  # real user, no key -> prompt
 
     # -- structured JSON (decompose) ---------------------------------------
     def generate_json(self, *, prompt: str, cache_key_extra: str = "") -> dict[str, Any]:

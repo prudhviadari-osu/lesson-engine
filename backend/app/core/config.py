@@ -89,13 +89,12 @@ class Settings:
     YOUTUBE_API_KEY: str = os.environ.get("YOUTUBE_API_KEY", "")
 
     # ---- Integrations ----
-    # When true, Canvas/OSU/Gemini integrations use offline mock data so the
-    # app runs fully without external network access. Auto-enabled when no
-    # Gemini key is present.
-    USE_MOCK_INTEGRATIONS: bool = (
-        os.environ.get("USE_MOCK_INTEGRATIONS", "").lower() in {"1", "true", "yes"}
-        or not os.environ.get("GEMINI_API_KEY", "")
-    )
+    # Canvas scrape / OSU auth / OSU class-search have no real implementation in
+    # this build (they're stubs), so they always use seeded offline data. This is
+    # internal plumbing, NOT a user-facing "mock mode". The LESSON AI (Gemini) is
+    # decided per-user instead: the demo account is always mock; everyone else
+    # uses the key they paste in Account Settings (no key -> "add your key").
+    STUB_CAMPUS_INTEGRATIONS: bool = True
 
     # ---- Organization ----
     ORG_NAME: str = "The Ohio State University"

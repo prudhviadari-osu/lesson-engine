@@ -44,7 +44,7 @@ def find_video(query: str) -> dict | None:
         return {**cached, "cached": True}
 
     key = settings.YOUTUBE_API_KEY
-    if not key or settings.USE_MOCK_INTEGRATIONS:
+    if not key:
         return _video_fallback(q, "no_api_key")
 
     import urllib.request  # pragma: no cover - network path
@@ -90,9 +90,6 @@ def find_reading(topic: str) -> dict | None:
     cached = repo.cache_get("wikipedia", hashed)
     if cached is not None:
         return {**cached, "cached": True}
-
-    if settings.USE_MOCK_INTEGRATIONS:
-        return _reading_fallback(t, "offline_mock")
 
     import urllib.request  # pragma: no cover - network path
     headers = {"User-Agent": "learning++/1.0 (hackathon project)"}

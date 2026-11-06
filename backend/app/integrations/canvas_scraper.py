@@ -17,7 +17,7 @@ logger = logging.getLogger("learnpp.canvas")
 
 class CanvasScraper:
     def __init__(self) -> None:
-        self.use_mock = settings.USE_MOCK_INTEGRATIONS
+        self.use_mock = settings.STUB_CAMPUS_INTEGRATIONS
 
     def scrape_student_data(self, name_dot_number: str) -> dict[str, Any]:
         """Return {courses: [...], assignments: [...], members: {...}}."""

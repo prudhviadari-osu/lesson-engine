@@ -86,7 +86,12 @@ const Views = (() => {
     </div>`;
 
     if (!stops.length) {
-      html += `<div class="empty">Your trail is clear. 🏔️ Head to <a href="#" data-nav="plan">Study Plan</a> to schedule today's climb, or <a href="#" data-nav="courses">Courses</a> to start a lesson.</div>`;
+      html += `<div class="empty">
+        <p style="font-size:1.05rem;margin-bottom:6px"><strong>No assignments yet</strong></p>
+        <p>Canvas sync isn't connected for your account yet — we're applying for Canvas
+        OAuth2 approval so learning++ can pull your real coursework in automatically. 🔒</p>
+        <p class="muted" style="margin-top:8px">Once approved, your assignments will appear here as a daily climb.</p>
+      </div>`;
       return html;
     }
 
@@ -129,7 +134,11 @@ const Views = (() => {
     const list = await API.get("/courses").catch(() => []);
     let head = `<div class="page-head read"><div class="row" style="gap:12px"><span class="ph-icon">🏔️</span>
       <div><h3>Your ranges</h3><p class="muted">Each course is a mountain range. Pick one and start climbing its assignments.</p></div></div></div>`;
-    if (!list.length) return head + `<div class="empty">You have no courses yet.</div>`;
+    if (!list.length) return head + `<div class="empty">
+      <p style="font-size:1.05rem;margin-bottom:6px"><strong>No courses yet</strong></p>
+      <p>Canvas integration is pending approval — we're applying for Canvas OAuth2 access
+      so your courses and assignments import automatically. 🔒</p>
+      <p class="muted" style="margin-top:8px">Coming soon.</p></div>`;
     let html = head + `<div class="grid">`;
     for (const c of list) {
       const members = await API.get(`/courses/${c.id}/members`).catch(() => []);

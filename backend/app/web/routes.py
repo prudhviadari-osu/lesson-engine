@@ -56,7 +56,7 @@ def health(req: Request):
     return {
         "status": "ok",
         "app": settings.APP_NAME,
-        "mock_integrations": settings.USE_MOCK_INTEGRATIONS,
+        "campus_integrations": "stubbed (Canvas OAuth2 pending)",
         "database": "sqlite",
     }
 

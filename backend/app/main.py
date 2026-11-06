@@ -122,8 +122,7 @@ def main() -> None:
     init_db()
     addr = (settings.HOST, settings.PORT)
     httpd = ThreadingHTTPServer(addr, Handler)
-    logger.info("Learn++ running on http://%s:%d  (mock=%s)",
-                settings.HOST, settings.PORT, settings.USE_MOCK_INTEGRATIONS)
+    logger.info("learning++ running on http://%s:%d", settings.HOST, settings.PORT)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
