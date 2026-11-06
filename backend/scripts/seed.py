@@ -93,7 +93,9 @@ def main() -> None:
     # --- Auto-generate interactive lessons for assignments due within 7 days.
     # Each assignment is decomposed into a staged flow (intro -> watch -> read
     # -> challenge -> draft -> complete) by the ported lesson engine. ---
-    created = autogenerate_due_soon()
+    # Generate as the demo account (buckeye.1) so lessons build in force-mock
+    # mode — no API key needed, no noisy fallback warning.
+    created = autogenerate_due_soon(student["id"])
     print(f"Auto-generated interactive lessons for {created} due-soon assignments.")
 
     # --- A guided project + a published showcase project ---

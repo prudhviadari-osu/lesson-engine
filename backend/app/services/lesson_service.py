@@ -55,12 +55,17 @@ def _assignment_lessons(assignment_id: int) -> dict:
     return {"assignmentId": assignment_id, "lessons": lessons}
 
 
-def autogenerate_due_soon() -> int:
-    """Generate interactive lessons for every assignment due within 7 days."""
+def autogenerate_due_soon(owner_user_id: int | None = None) -> int:
+    """Generate interactive lessons for every assignment due within 7 days.
+
+    `owner_user_id` is the student the assignments belong to (e.g. the demo
+    account during seeding). Passing it means the demo account's lessons are
+    generated in its normal (force-mock) mode — no key needed, no noisy warning.
+    """
     created = 0
     for a in repo.list_all_assignments():
         if not repo.assignment_has_lessons(a["id"]) and _due_within_window(a["due_at"]):
-            generate_lesson_for_assignment(a)
+            generate_lesson_for_assignment(a, owner_user_id)
             created += 1
     logger.info("Auto-generated interactive lessons for %d due-soon assignments.", created)
     return created
