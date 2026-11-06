@@ -1,166 +1,140 @@
-Repository for the **HACK OH/IO** project — **Learn++**.
+# learning++ &nbsp;·&nbsp; HACK OH/IO
+
+> **Climb the material — don't just finish the assignment.**
+
+learning++ turns a student's coursework into an **interactive, gamified mastery
+climb**: the real homework questions are the spine, wrapped in short AI-tutored
+steps that teach each skill and check it, so you actually *learn* the material
+instead of copy-pasting an AI answer. It's built around a mountain-climbing
+metaphor — each day is a paced ascent toward a summit, no cramming.
+
+Around the lesson engine sits a full campus platform — course forums, a project
+showcase for recruiters, announcements, a schedule advisor, customizable
+profiles, a study planner, and an AI-built **Portfolio** — all under role-based
+access for Students, Professors, Administration, and Verified Recruiters.
+
+**One unified Python app, standard-library only** (a hand-rolled HTTP router,
+SQLite, stdlib JWT — no `pip install` needed) serving a vanilla-JS single-page
+UI on one origin. It runs fully offline.
 
 ---
 
-# Learn++
+## The lesson experience (the heart of it)
 
-> Learn the assignment, don't just finish it.
+A lesson is a **staged mastery climb**, and the climb *is* the real assignment:
 
-Learn++ is a web tool for college students (built around **The Ohio State
-University**) that turns upcoming coursework into an **interactive, gamified
-lesson experience** — an AI "Coach" tutor plus a staged flow that teaches the
-concept, then guides you to produce the real deliverable **in your own words**
-(the opposite of copy-pasting an AI answer). It also hosts **course-scoped
-forums**, a **project showcase** that approved recruiters can browse,
-**announcements**, a **schedule advisor**, **customizable profiles**, a
-**study planner**, and a **Portfolio** builder — all under role-based access
-control for Students, Professors, Administration, and Verified Recruiters.
-
-This is **one unified Python app** (standard-library only, runs fully offline).
-It merges a teammate's Learn++ platform (auth/roles/forums/recruiters/
-announcements/advisor/profiles/Canvas-scrape) with a ported **lesson engine**
-(decompose → Coach tutor → gamified staged flow → planner/reflow → compile with
-a review+consent gate → learning-style preferences).
-
-### The lesson experience
-
-1. **Decompose** — an assignment is broken into ~10-15 min lessons, each a
-   sequence of typed blocks (video / reading excerpt / scaffold question /
-   draft / flashcards). Tailored by the student's learning-style preferences.
-2. **Staged flow** (the main way a lesson is "done") — an ordered journey
-   `intro → watch video → read excerpt → bite-size challenges → draft the real
-   deliverable → complete`, with **XP per stage, a lesson progress %, a daily
-   XP goal, and a streak**. Instant correct/try-again feedback on challenges.
-3. **Coach tutor** — a live multi-turn chat that teaches in small bites, reacts
-   to what you actually typed, and **never writes your answer for you**.
-4. **Compile + consent** — assembles your own answers into a submission bundle,
-   grouped by lesson, and gates "ready to submit" behind an explicit
-   review+consent tied to a content hash (editing an answer makes it stale).
-5. **Planner** — schedules lessons backward from each due date with a daily cap
-   and submission buffer; unschedule → backlog.
-6. **Portfolio** (the point of uniqueness) — from the work you've actually
-   completed, AI extracts resume-worthy **skills** (accumulating over time) and
-   recommends **portfolio projects** that build on them. "Get Help" on a project
-   materializes it as a self-assigned assignment run through the *same* gamified
-   lesson flow — so a recommendation becomes a real, playable lesson, not a
-   static plan. A resume-friendly **Personal Portfolio** view shows your skills,
-   completed work, saved projects, and stats. Skills are only credited from work
-   you genuinely finished (same honesty basis as compile).
-
-**Mock vs real:** with **no `GEMINI_API_KEY`** (or `USE_MOCK_INTEGRATIONS=1`)
-every AI path — decompose, Coach tutor, and per-stage feedback — uses
-deterministic offline mocks, so the whole app and smoke test run with no
-network. Set `GEMINI_API_KEY` to use the real Gemini REST API (urllib, zero
-pip installs); it falls back to the mock on overload/error so work is never
-lost.
+1. **The real homework is the spine.** Each assignment's actual questions become
+   "draft" work stages — you do your genuine coursework inside the tool.
+2. **AI mastery supplements wrap around them** — a short teaching clip/reading, a
+   mix of **multiple-choice** and **short-answer** checks (instant green/coral
+   feedback), building you up to nail *those specific* questions.
+3. **Coach** — a live AI tutor that teaches in small bites, reacts to what you
+   actually type, and **never writes your answer for you**.
+4. **Gamified & paced** — XP per stage, a progress ring, a daily XP goal, a
+   streak, and a celebratory summit when you finish. The planner spreads lessons
+   backward from each due date within the time you have (an adjustable **1–6 h /
+   day** budget), so work is front-loaded, never crammed.
+5. **Compile + consent** — assembles *your own* answers into a submission bundle,
+   grouped by lesson, and only marks it "ready" after you review + consent
+   (editing an answer invalidates prior consent — honesty by design).
+6. **Portfolio** — from work you *actually completed*, AI extracts resume-worthy
+   skills and recommends projects; "Get Help" turns a recommendation into a real
+   playable lesson. Nothing is credited that you didn't finish.
 
 ---
 
 ## Quick start
 
-No third-party packages are required — the backend runs on the Python standard
-library, and the database is SQLite out of the box.
+No third-party packages required — Python standard library + SQLite out of the box.
 
-> **Run these from the repository root** — the folder that *contains* `backend/`
-> (not from inside `backend/`). Otherwise you'll see `No module named backend`.
-> `ls` should show the `backend/` folder before you run them.
+> **Run from the repository root** — the folder that *contains* `backend/` (not
+> from inside `backend/`), or you'll get `No module named backend`. `ls` should
+> show `backend/` first. Use `python3` if `python` isn't Python 3.
 
 ```bash
-# 1. Seed the database with sample users + content
-python -m backend.scripts.seed
+# 1. Seed the demo data
+python3 -m backend.scripts.seed
 
-# 2. Start the server (serves API + UI on one origin)
-python -m backend.app.main
+# 2. Start the server (serves the API + UI on one origin)
+python3 -m backend.app.main
 
 # 3. Open the UI
 #    http://127.0.0.1:8000
 ```
 
-If you hit `No module named backend`, you're in the wrong directory — `cd` up to
-the repo root (where `backend/` lives) and re-run. Use `python3` if `python`
-isn't Python 3 on your machine.
+> Requires Python 3.10+ (tested on 3.11–3.13).
 
-> Requires Python 3.10+ (tested on 3.11).
+### Try the demo
 
-### Demo accounts
+Log in as the demo student and open the ECE 2060 climb:
 
-All seeded accounts use the password **`Password123`**.
-Students & professors complete OSU two-factor with the code **`000000`**.
+| Field | Value |
+|---|---|
+| Email | `buckeye.1@osu.edu` |
+| Password | `Password123` |
+| OSU 2FA code | `000000` |
 
-| Role       | Email                              |
-|------------|------------------------------------|
-| Student    | `buckeye.1@osu.edu`                |
-| Student    | `scarlet.2@osu.edu`                |
-| Professor  | `weide.1@osu.edu`                  |
-| Professor  | `gomez.2@osu.edu`                  |
-| Admin      | `admin@osu.edu`                    |
-| Recruiter  | `recruiter.google@learnpp.test`    |
-| Recruiter  | `recruiter.amazon@learnpp.test`    |
+Other seeded logins: professors `weide.1@osu.edu` / `gomez.2@osu.edu`, admin
+`admin@osu.edu`, recruiters `recruiter.google@learnpp.test` /
+`recruiter.amazon@learnpp.test` (same password; students/professors use 2FA
+`000000`).
 
 ---
 
-## Features → PRD mapping
+## AI keys & mock mode (no setup needed to run)
 
-| Feature | Where |
-|---|---|
-| Course forums, access limited to enrolled members | `web/routes.py` (forums) + `web/access.py` |
-| Auto-decomposed interactive lessons for assignments due ≤ 7 days | `services/lesson_service.py`, `services/decompose_service.py` |
-| Gamified staged flow (XP, progress, daily goal, streak) | `services/flow_service.py`, `frontend/js/views.js` (lessonFlow) |
-| Interactive "Coach" tutor (multi-turn, anti-copy-paste) | `services/tutor_service.py`, `frontend/js/views.js` |
-| Compile + review/consent gate (content-hash) | `services/compile_service.py`, `frontend/js/views.js` (compile) |
-| Study planner + reflow (backward from due date, daily cap, backlog) | `services/planner_service.py` |
-| Learning-style preferences (max 2 + notes) | `services/preferences_service.py` |
-| **Portfolio**: AI skills from completed work → recommended projects → "Get Help" lessons → resume view | `services/portfolio_service.py`, `frontend/js/views.js` (portfolio) |
-| AI over urllib (decompose JSON + Coach chat) with offline mocks | `integrations/gemini_service.py`, `services/ai_mock.py` |
-| Projects: guided (course-scoped) + showcase (recruiter-visible) + comments | `web/routes.py` (projects) |
-| Announcements (events / study / exams / resources) | `web/routes.py` (announcements) |
-| Schedule advisor via OSU class search | `integrations/osu_classsearch.py` |
-| Profiles with GitHub/LinkedIn, **no social media**, avatars | `web/routes.py` (users) |
-| 4-role login + OSU verification + 2FA | `web/routes.py` (auth), `integrations/osu_auth.py` |
-| Canvas scrape (courses, calendar, members/roles) via Playwright | `integrations/canvas_scraper.py`, `services/onboarding_service.py` |
-| User database (MySQL in prod) | `db/database.py` + `docs/MIGRATION.md` |
-| Collapsible sidebar + mobile bottom bar | `frontend/` |
-| Recruiters restricted to showcase, only if on registry | `web/routes.py`, `web/access.py`, admin registry |
+The app runs out of the box with **no API key and no `.env`**:
+
+- **`buckeye.1` is the demo account** — always runs on built-in demo content
+  (the deep ECE 2060 "Number Systems" climb), so the demo is fully reliable with
+  no key and no network.
+- **Any other account** uses **live AI** with a key you paste on the in-app
+  **Account Settings** page. The key is held **in memory for that session only**
+  — never written to `.env`, disk, or the database, and cleared on logout. Get a
+  free Gemini key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
+- **Canvas ingestion is pending** — we're applying for Canvas **OAuth2** approved-
+  integration access. Until then, non-demo accounts honestly show a *"Canvas
+  integration coming soon"* empty state rather than fake data.
+
+(A server-wide `GEMINI_API_KEY` / `YOUTUBE_API_KEY` can optionally be set in
+`backend/.env` as a dev fallback — see `backend/.env.example` — but it's not
+required.)
 
 ---
 
 ## Verifying it works
 
-Run the end-to-end smoke test (server must be running):
-
 ```bash
-python -m backend.app.main &        # start server
-python backend/scripts/smoke_test.py
+python3 -m backend.app.main &            # start the server
+python3 backend/scripts/smoke_test.py    # 59 checks
 ```
 
-It exercises the full app — role login, course-scoped access, recruiter
-restrictions, the interactive lesson engine (decompose, gamified flow with XP,
-Coach tutor, challenge/draft, compile + consent gate, learning preferences,
-planner/backlog), the Portfolio (skills, project guide, "Get Help"), forums,
-moderation, projects, profiles, admin registry — and prints a pass/fail summary
-(59 checks).
+Exercises the whole app end-to-end: role login + OSU 2FA, course-scoped access,
+recruiter restrictions, the lesson engine (decompose → gamified staged flow with
+XP/MCQ/short-answer → Coach tutor → compile + consent gate → learning
+preferences → planner/backlog), the Portfolio, forums, moderation, projects,
+profiles, and the admin registry. Prints a pass/fail summary.
 
 ---
 
-## Deployment target (Ubuntu VM on Mac)
+## Tech & architecture
 
-The PRD specifies the backend runs on an **Ubuntu VM** with the UI on
-**localhost**, using **MySQL** and the **real** Canvas / OSU / Gemini
-integrations. This repo is built to run **identically** offline (SQLite + mock
-integrations) and in production (MySQL + live integrations):
+- **Backend:** Python standard library only — `http.server` + a ~100-line
+  path-pattern router, `sqlite3`, and a hand-written HS256 JWT. Zero runtime
+  `pip` dependencies.
+- **AI:** Gemini via `urllib` — structured JSON for decompose, warm free-text for
+  the Coach tutor + feedback, with automatic model fallback on overload. Keyless
+  → deterministic offline mocks so everything still works.
+- **Resources:** YouTube Data API for in-flow videos, Wikipedia for readings
+  (both degrade to a search link without a key).
+- **Frontend:** vanilla HTML/CSS/JS single-page app, no build step.
+- **Data:** SQLite locally; the data-access layer isolates all SQL so it can be
+  swapped to MySQL in production (see [`docs/MIGRATION.md`](docs/MIGRATION.md)).
 
-- **Enable real Gemini**: set `GEMINI_API_KEY` (and optionally `GEMINI_MODEL` /
-  `GEMINI_FALLBACKS`) in `backend/.env` or the environment. The lesson engine
-  then calls the real Gemini REST API over `urllib` (no pip installs) for
-  decompose + the Coach tutor + feedback, with automatic model fallback on
-  overload and a graceful drop back to the offline mock. See `.env.example`.
-- **Enable MySQL**: see [`docs/MIGRATION.md`](docs/MIGRATION.md).
-- **Enable real Canvas/OSU**: `pip install playwright && playwright install
-  chromium`, then flip `USE_MOCK_INTEGRATIONS=0`. Integration points are stubbed
-  with clear `NotImplementedError`s in `integrations/`.
-
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design and
-[`docs/RUNBOOK.md`](docs/RUNBOOK.md) for VM setup steps.
+### Roadmap
+- Canvas **OAuth2** integration (approval pending) to auto-import real coursework.
+- A local **Ollama** model as an offline AI fallback (no key needed).
+- Web-crawled supplementary resources.
 
 ---
 
@@ -169,16 +143,16 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design and
 ```
 backend/
   app/
-    core/          config + security (JWT, password hashing)
+    core/          config, security (JWT, password hashing), per-session API keys
     db/            SQLite data-access layer + repository (swappable to MySQL)
-    integrations/  Gemini (urllib JSON + chat), Canvas (Playwright), OSU auth/search
+    integrations/  Gemini (urllib), Canvas/OSU stubs (OAuth2 pending)
     services/      lesson engine: decompose, resolve, tutor, flow, compile,
-                   planner, preferences, portfolio, lesson_service (Canvas
-                   autogen), ai_mock (offline AI), onboarding
+                   planner, preferences, portfolio, lesson/onboarding, ai_mock
     web/           tiny HTTP router, access control, routes
-    main.py        server entrypoint (API + static UI, one origin)
+    main.py        server entrypoint (API + static UI on one origin)
   scripts/         seed.py, smoke_test.py
-frontend/          single-page UI (vanilla JS, no build step):
-                   index.html shell, css/styles.css, js/{api,views,app}.js
+frontend/          single-page UI (vanilla JS): index.html, css/, js/
 docs/              architecture, migration, runbook
 ```
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design.
